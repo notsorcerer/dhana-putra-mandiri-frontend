@@ -128,3 +128,19 @@
     @apply font-sans;
   }
 }
+/* Cetak dokumen (surat jalan): sembunyikan kerangka aplikasi */
+@media print {
+  body {
+    background: white;
+  }
+  aside,
+  header,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+}
