@@ -48,7 +48,10 @@ export default function SalesInvoicesPage() {
     {
       key: "terms",
       header: "Pembayaran",
-      render: (row) => (row.invoice_date === row.due_date ? "Tunai" : "Tempo"),
+      render: (row) =>
+        row.payment_method === "cash" || row.invoice_date === row.due_date
+          ? "Tunai"
+          : "Tempo",
     },
     {
       key: "due_date",
@@ -59,6 +62,11 @@ export default function SalesInvoicesPage() {
       key: "total_amount",
       header: "Total (Rp)",
       render: (row) => rupiah(row.total_amount),
+    },
+    {
+      key: "remaining_due",
+      header: "Sisa tagihan",
+      render: (row) => rupiah(row.remaining_due ?? row.remaining_balance ?? "0"),
     },
     {
       key: "status",
@@ -99,7 +107,7 @@ export default function SalesInvoicesPage() {
             >
               <option value="">Semua status</option>
               <option value="draft">Draft</option>
-              <option value="unpaid">Belum Dibayar</option>
+              <option value="approved">Disetujui / Belum Lunas</option>
               <option value="partially_paid">Dibayar Sebagian</option>
               <option value="paid">Lunas</option>
               <option value="cancelled">Dibatalkan</option>

@@ -10,19 +10,29 @@ import { ApiError, apiPatch, apiPost } from "@/lib/api";
 import type { Employee } from "@/types/api";
 
 export const DEPARTMENT_OPTIONS = [
-  { value: "direksi", label: "Direksi" },
+  { value: "manajemen", label: "Manajemen & Direksi" },
   { value: "sales", label: "Sales & Marketing" },
-  { value: "gudang", label: "Gudang & Logistik" },
+  { value: "gudang", label: "Gudang" },
+  { value: "logistik", label: "Logistik & Pengiriman" },
   { value: "finance", label: "Finance (Kasir)" },
   { value: "accounting", label: "Accounting & Pajak" },
-  { value: "general", label: "Umum & Operasional" },
+  { value: "operasional", label: "Operasional" },
+];
+
+export const EMPLOYMENT_STATUS_OPTIONS = [
+  { value: "permanent", label: "Karyawan Tetap" },
+  { value: "contract", label: "Kontrak (PKWT)" },
+  { value: "probation", label: "Masa Percobaan (Probation)" },
 ];
 
 interface EmployeeFormValues {
   employee_id: string;
   full_name: string;
+  national_id: string;
+  tax_id: string;
   department: string;
   position: string;
+  employment_status: string;
   joined_date: string;
   email: string;
   phone: string;
@@ -37,8 +47,11 @@ interface EmployeeFormValues {
 const EMPTY: EmployeeFormValues = {
   employee_id: "",
   full_name: "",
-  department: "general",
+  national_id: "",
+  tax_id: "",
+  department: "operasional",
   position: "",
+  employment_status: "permanent",
   joined_date: "",
   email: "",
   phone: "",
@@ -54,8 +67,11 @@ function toValues(employee: Employee): EmployeeFormValues {
   return {
     employee_id: employee.employee_id,
     full_name: employee.full_name,
+    national_id: employee.national_id ?? "",
+    tax_id: employee.tax_id ?? "",
     department: employee.department,
     position: employee.position,
+    employment_status: employee.employment_status ?? "permanent",
     joined_date: employee.joined_date,
     email: employee.email ?? "",
     phone: employee.phone ?? "",
@@ -157,6 +173,21 @@ export function EmployeeForm({ employee }: { employee?: Employee | null }) {
         />
       </label>
       <label>
+        Status kepegawaian *
+        <select
+          id="emp-status"
+          required
+          value={values.employment_status}
+          onChange={(e) => set("employment_status", e.target.value)}
+        >
+          {EMPLOYMENT_STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
         Tanggal masuk *
         <Input
           id="emp-joined"
@@ -164,6 +195,24 @@ export function EmployeeForm({ employee }: { employee?: Employee | null }) {
           required
           value={values.joined_date}
           onChange={(e) => set("joined_date", e.target.value)}
+        />
+      </label>
+      <label>
+        NIK KTP
+        <Input
+          id="emp-ktp"
+          value={values.national_id}
+          onChange={(e) => set("national_id", e.target.value)}
+          placeholder="16 digit NIK"
+        />
+      </label>
+      <label>
+        NPWP
+        <Input
+          id="emp-npwp"
+          value={values.tax_id}
+          onChange={(e) => set("tax_id", e.target.value)}
+          placeholder="Opsional"
         />
       </label>
       <label>

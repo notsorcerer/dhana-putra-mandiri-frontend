@@ -21,7 +21,10 @@ export default function PaymentsPage() {
     {
       key: "cash_bank_account",
       header: "Akun",
-      render: (row) => `${row.cash_bank_account_code} · ${row.cash_bank_account_name}`,
+      render: (row) =>
+        `${row.cash_bank_account_code ? `${row.cash_bank_account_code} · ` : ""}${
+          row.cash_bank_name ?? row.cash_bank_account_name ?? "—"
+        }`,
     },
     {
       key: "payment_date",
@@ -40,9 +43,13 @@ export default function PaymentsPage() {
     },
     {
       key: "party",
-      header: "Mitra",
+      header: "Mitra / Referensi",
       render: (row) =>
-        row.customer_name_display || row.supplier_name_display || "Internal",
+        row.customer_name_display ||
+        row.supplier_name_display ||
+        row.invoice_number ||
+        row.receipt_number ||
+        "Internal",
     },
     {
       key: "amount",

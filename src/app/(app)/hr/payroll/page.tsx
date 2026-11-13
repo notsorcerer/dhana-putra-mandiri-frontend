@@ -9,13 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { PageHeader } from "@/components/app/page-header";
-import { StatusBadge } from "@/components/app/status-badge";
+import { StatusBadge, statusLabel } from "@/components/app/status-badge";
 import { ApiError, apiPost, fetchAllPages } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { MONTHS_ID, dateId, rupiah } from "@/lib/format";
+import { MONTHS_ID, dateId, rupiah, suggestDocNumber, todayIso } from "@/lib/format";
 import { CAN, can, type Role } from "@/lib/menu";
 import { usePaginated } from "@/lib/use-api";
-import type { ChartOfAccounts, Employee, PayrollSlip } from "@/types/api";
+import type { ChartOfAccounts, Employee, Payment, PayrollSlip } from "@/types/api";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -33,6 +33,7 @@ const HR_TABS: { href: string; label: string; roles: readonly Role[] }[] = [
 export default function PayrollPage() {
   const { session } = useAuth();
   const canGenerate = can(CAN.generatePayroll, session?.role);
+  const canApprove = can(CAN.approvePayroll, session?.role);
   const canDisburse = can(CAN.disbursePayroll, session?.role);
   const { data, loading, error, page, setPage, totalPages, reload } = usePaginated<PayrollSlip>(
     "/hr/payroll-slips/",
@@ -43,6 +44,7 @@ export default function PayrollPage() {
   const [saving, setSaving] = useState(false);
 
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [genForm, setGenForm] = useState({
     employee: "",
     period_month: String(new Date().getMonth() + 1),
@@ -54,7 +56,7 @@ export default function PayrollPage() {
   });
 
   const [disburseTarget, setDisburseTarget] = useState<PayrollSlip | null>(null);
-  const [disburseAccount, setDisburseAccount] = useState("1120");
+  const [disburseAccount, setDisburseAccount] = useState("");
   const visibleTabs = HR_TABS.filter((tab) => can(tab.roles, session?.role));
 
   useEffect(() => {
@@ -68,17 +70,22 @@ export default function PayrollPage() {
   useEffect(() => {
     if (disburseTarget) {
       fetchAllPages<ChartOfAccounts>("/finance/chart-of-accounts/")
-        .then((rows) =>
-          setAccounts(
-            rows.filter(
-              (acc) =>
-                acc.account_type === "ASSET" &&
-                acc.code.startsWith("11") &&
-                acc.code !== "1130" &&
-                acc.code !== "1140",
-            ),
-          ),
-        )
+        .then((rows) => {
+          const cashBank = rows.filter((acc) => {
+            if (acc.is_cash_bank) return true;
+            const code = acc.account_code ?? acc.code ?? "";
+            return (
+              acc.account_type === "ASSET" &&
+              code.startsWith("11") &&
+              code !== "1130" &&
+              code !== "1140"
+            );
+          });
+          setAccounts(cashBank);
+          if (cashBank.length > 0) {
+            setDisburseAccount(String(cashBank[0].id));
+          }
+        })
         .catch(() => toast.error("Gagal memuat daftar akun kas/bank."));
     }
   }, [disburseTarget]);
@@ -108,15 +115,59 @@ export default function PayrollPage() {
     }
   };
 
+  const handleBatchGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const res = await apiPost<{ generated_count: number; skipped_count: number }>(
+        "/hr/payroll-slips/generate_monthly/",
+        {
+          period_month: Number(genForm.period_month),
+          period_year: Number(genForm.period_year),
+        },
+      );
+      toast.success(
+        `Payroll bulanan dibuat: ${res.generated_count} slip baru (${res.skipped_count} dilewati).`,
+      );
+      setBatchOpen(false);
+      reload();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Gagal generate payroll bulanan.", {
+        duration: 8000,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleApprove = async (slip: PayrollSlip) => {
+    try {
+      await apiPost<PayrollSlip>(`/hr/payroll-slips/${slip.id}/approve/`);
+      toast.success(
+        `Slip ${slip.slip_number} (${slip.employee_name}) disetujui & jurnal akrual beban gaji diposting.`,
+      );
+      reload();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Gagal menyetujui slip gaji.");
+    }
+  };
+
   const handleDisburse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!disburseTarget) return;
     setSaving(true);
     try {
-      await apiPost<{ message: string; data: PayrollSlip }>(
-        `/hr/payroll-slips/${disburseTarget.id}/disburse/`,
-        { disbursement_account_code: disburseAccount },
-      );
+      await apiPost<Payment>("/finance/payments/", {
+        payment_number: suggestDocNumber("BKK"),
+        category: "payroll",
+        payroll_slip: disburseTarget.id,
+        cash_bank_account: Number(disburseAccount),
+        payment_date: todayIso(),
+        payment_method: "bank_transfer",
+        payment_type: "bank_transfer",
+        amount: disburseTarget.net_salary,
+        notes: `Pembayaran gaji ${disburseTarget.slip_number} - ${disburseTarget.employee_name}`,
+      });
       toast.success(
         `Gaji ${disburseTarget.employee_name} periode ${MONTHS_ID[disburseTarget.period_month - 1]} ${disburseTarget.period_year} telah dibayarkan & jurnal diposting.`,
       );
@@ -142,7 +193,8 @@ export default function PayrollPage() {
         <div>
           <strong>{row.employee_name}</strong>
           <div className="text-xs text-muted-foreground">
-            {row.employee_code} · {row.department}
+            {row.employee_nik ?? row.employee_code ?? "-"}
+            {row.department ? ` · ${statusLabel(row.department)}` : ""}
           </div>
         </div>
       ),
@@ -193,19 +245,28 @@ export default function PayrollPage() {
     {
       key: "actions",
       header: "",
-      render: (row) =>
-        canDisburse && row.status !== "paid" ? (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setDisburseAccount("1120");
-              setDisburseTarget(row);
-            }}
-          >
-            Bayarkan
-          </Button>
-        ) : null,
+      render: (row) => (
+        <div className="flex gap-1.5">
+          {canApprove && row.status === "draft" ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleApprove(row)}
+            >
+              Setujui
+            </Button>
+          ) : null}
+          {canDisburse && row.status === "approved" ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDisburseTarget(row)}
+            >
+              Bayarkan
+            </Button>
+          ) : null}
+        </div>
+      ),
     },
   ];
 
@@ -214,12 +275,30 @@ export default function PayrollPage() {
       <PageHeader
         eyebrow="SUMBER DAYA MANUSIA"
         title="Payroll & slip gaji"
-        description="Slip gaji bulanan karyawan. Generate slip oleh Accounting/Direktur; pembayaran (disburse) oleh Kasir/Direktur dan otomatis memposting jurnal beban gaji."
+        description="Slip gaji bulanan karyawan (Two-Stage Payroll): 1) Generate slip oleh Accounting/Direktur, 2) Setujui oleh Direktur (akrual beban gaji), 3) Bayarkan oleh Kasir/Direktur."
       >
         {canGenerate ? (
-          <Button type="button" onClick={() => setGenerateOpen((v) => !v)}>
-            {generateOpen ? "Tutup Form" : "+ Generate Slip Gaji"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setGenerateOpen(false);
+                setBatchOpen((v) => !v);
+              }}
+            >
+              {batchOpen ? "Tutup Batch" : "Generate Bulanan"}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setBatchOpen(false);
+                setGenerateOpen((v) => !v);
+              }}
+            >
+              {generateOpen ? "Tutup Form" : "+ Generate Slip Gaji"}
+            </Button>
+          </div>
         ) : null}
       </PageHeader>
 
@@ -234,6 +313,57 @@ export default function PayrollPage() {
           </Link>
         ))}
       </nav>
+
+      {batchOpen && canGenerate ? (
+        <form onSubmit={handleBatchGenerate} className="panel formgrid mb-4">
+          <div className="panelhead wide">
+            <div>
+              <h2>Generate payroll bulanan (seluruh karyawan aktif)</h2>
+              <p>
+                Membuat draf slip gaji otomatis untuk seluruh karyawan aktif termasuk perhitungan jam lembur pada periode tersebut.
+              </p>
+            </div>
+          </div>
+
+          <label htmlFor="batch-month">
+            Bulan periode *
+            <select
+              id="batch-month"
+              required
+              value={genForm.period_month}
+              onChange={(e) => setGenForm((p) => ({ ...p, period_month: e.target.value }))}
+            >
+              {MONTHS_ID.map((month, index) => (
+                <option key={month} value={index + 1}>
+                  {month}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="batch-year">
+            Tahun periode *
+            <Input
+              id="batch-year"
+              type="number"
+              min="2001"
+              required
+              value={genForm.period_year}
+              onChange={(e) => setGenForm((p) => ({ ...p, period_year: e.target.value }))}
+            />
+          </label>
+
+          <div className="form-actions wide">
+            <Button type="button" variant="outline" onClick={() => setBatchOpen(false)} disabled={saving}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? <Loader2 className="animate-spin" /> : null}
+              Generate Seluruh Karyawan
+            </Button>
+          </div>
+        </form>
+      ) : null}
 
       {generateOpen && canGenerate ? (
         <form onSubmit={handleGenerate} className="panel formgrid mb-4">
@@ -258,7 +388,10 @@ export default function PayrollPage() {
               <option value="">— pilih karyawan aktif —</option>
               {employees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
-                  {employee.employee_id} · {employee.full_name} · {rupiah(employee.base_salary)}
+                  {employee.employee_id} · {employee.full_name}
+                  {employee.base_salary !== undefined
+                    ? ` · ${rupiah(employee.base_salary)}`
+                    : ""}
                 </option>
               ))}
             </select>
@@ -371,11 +504,10 @@ export default function PayrollPage() {
               onChange={(e) => setDisburseAccount(e.target.value)}
             >
               {accounts.map((acc) => (
-                <option key={acc.id} value={acc.code}>
-                  {acc.code} · {acc.name}
+                <option key={acc.id} value={acc.id}>
+                  {acc.account_code ?? acc.code} · {acc.name}
                 </option>
               ))}
-              {accounts.length === 0 ? <option value="1120">1120 · Bank BCA (default)</option> : null}
             </select>
           </label>
 

@@ -62,11 +62,13 @@ export default function ProductsPage() {
             key: "inventory_value",
             header: "Nilai persediaan",
             render: (row: Product) =>
-              row.moving_average_hpp !== undefined
-                ? rupiah(num(row.current_stock) * num(row.moving_average_hpp))
-                : row.selling_price !== undefined
-                  ? rupiah(row.selling_price)
-                  : "—",
+              row.stock_value !== undefined
+                ? rupiah(row.stock_value)
+                : row.moving_average_hpp !== undefined
+                  ? rupiah(num(row.current_stock) * num(row.moving_average_hpp))
+                  : row.selling_price !== undefined
+                    ? rupiah(row.selling_price)
+                    : "—",
           } satisfies Column<Product>,
         ]
       : []),

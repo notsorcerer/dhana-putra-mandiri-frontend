@@ -17,7 +17,9 @@ interface CustomerFormValues {
   phone: string;
   email: string;
   address: string;
+  tax_id: string;
   credit_limit: string;
+  payment_term_days: number;
   is_active: boolean;
 }
 
@@ -28,7 +30,9 @@ const EMPTY: CustomerFormValues = {
   phone: "",
   email: "",
   address: "",
+  tax_id: "",
   credit_limit: "0.00",
+  payment_term_days: 30,
   is_active: true,
 };
 
@@ -40,7 +44,9 @@ function toValues(customer: Customer): CustomerFormValues {
     phone: customer.phone ?? "",
     email: customer.email ?? "",
     address: customer.address ?? "",
+    tax_id: customer.tax_id ?? "",
     credit_limit: customer.credit_limit ?? "0.00",
+    payment_term_days: customer.payment_term_days ?? 30,
     is_active: customer.is_active,
   };
 }
@@ -145,6 +151,25 @@ export function CustomerForm({ customer }: { customer?: Customer | null }) {
           step="0.01"
           value={values.credit_limit}
           onChange={(e) => set("credit_limit", e.target.value)}
+        />
+      </label>
+      <label>
+        Termin pembayaran (hari)
+        <Input
+          id="cust-terms"
+          type="number"
+          min="0"
+          value={values.payment_term_days}
+          onChange={(e) => set("payment_term_days", Number(e.target.value) || 0)}
+        />
+      </label>
+      <label>
+        NPWP / Tax ID
+        <Input
+          id="cust-tax"
+          value={values.tax_id}
+          onChange={(e) => set("tax_id", e.target.value)}
+          placeholder="Opsional"
         />
       </label>
       <label className="wide">

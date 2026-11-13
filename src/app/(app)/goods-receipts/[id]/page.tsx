@@ -161,7 +161,12 @@ export default function GoodsReceiptDetailPage() {
           <p>
             Transport {rupiah(receipt.transport_cost)} · Bongkar{" "}
             {rupiah(receipt.unloading_cost)}
-            {receipt.po_reference ? ` · Bukti ${receipt.po_reference}` : ""}
+            {receipt.payable_amount !== undefined
+              ? ` · Tagihan pemasok ${rupiah(receipt.payable_amount)}`
+              : ""}
+            {receipt.net_payable !== undefined
+              ? ` · Sisa hutang bersih ${rupiah(receipt.net_payable)}`
+              : ""}
           </p>
           <div className="scroll">
             <table>

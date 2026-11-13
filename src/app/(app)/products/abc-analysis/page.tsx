@@ -1,13 +1,15 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { PeriodFilter } from "@/components/app/period-filter";
 import { GradeBadge } from "@/components/app/status-badge";
+import { fetchAllPages } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { pct, qty, rupiah } from "@/lib/format";
+import { num, pct, qty, rupiah } from "@/lib/format";
 import { CAN, can } from "@/lib/menu";
 import { useApi } from "@/lib/use-api";
-import type { AbcRow, StockEstimationRow } from "@/types/api";
+import type { Product, StockEstimationRow } from "@/types/api";
 
 /**
  * Halaman Analisis Persediaan (Klasifikasi ABC & Estimasi Permintaan):
@@ -17,20 +19,62 @@ export default function AbcAnalysisPage() {
   const { session } = useAuth();
   const showFinancial = can(CAN.viewFinancialValues, session?.role);
 
-  const { data: abcData, loading: abcLoading, error: abcError } = useApi<
-    Record<"A" | "B" | "C", AbcRow[]>
-  >("/inventory/products/abc-analysis/");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [abcLoading, setAbcLoading] = useState(true);
+  const [abcError, setAbcError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setAbcLoading(true);
+    fetchAllPages<Product>("/inventory/products/")
+      .then((rows) => {
+        if (active) {
+          setProducts(rows.filter((p) => p.is_active));
+          setAbcError(null);
+        }
+      })
+      .catch((err) => {
+        if (active) setAbcError(err instanceof Error ? err.message : "Gagal memuat produk.");
+      })
+      .finally(() => {
+        if (active) setAbcLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const { data: estData } = useApi<StockEstimationRow[]>(
     "/inventory/products/stock-estimation/",
   );
 
-  const abcRows = abcData
-    ? [
-        ...abcData.A.map((r) => ({ ...r, cls: "A" as const })),
-        ...abcData.B.map((r) => ({ ...r, cls: "B" as const })),
-        ...abcData.C.map((r) => ({ ...r, cls: "C" as const })),
-      ]
-    : [];
+  const abcRows = useMemo(() => {
+    const withVal = products.map((p) => {
+      const stock = num(p.current_stock);
+      const hpp = num(p.moving_average_hpp ?? p.selling_price ?? 0);
+      const totalVal = p.stock_value !== undefined ? num(p.stock_value) : stock * hpp;
+      return {
+        sku: p.sku,
+        name: p.name,
+        current_stock: stock,
+        moving_average_hpp: hpp,
+        total_value: totalVal,
+        cls: (p.abc_class || "B") as "A" | "B" | "C",
+      };
+    });
+    withVal.sort((a, b) => b.total_value - a.total_value || b.current_stock - a.current_stock);
+    const grandTotal = withVal.reduce((s, r) => s + r.total_value, 0);
+    let cum = 0;
+    return withVal.map((r) => {
+      const percentage = grandTotal > 0 ? (r.total_value / grandTotal) * 100 : 0;
+      cum += percentage;
+      return {
+        ...r,
+        percentage,
+        cumulative_percentage: Math.min(100, cum),
+      };
+    });
+  }, [products]);
 
   const estRows = [...(estData ?? [])].sort(
     (a, b) => a.estimated_stock_days - b.estimated_stock_days,
@@ -151,7 +195,11 @@ export default function AbcAnalysisPage() {
                 </tr>
               ) : (
                 estRows.map((r) => {
-                  const isRisk = r.is_stock_below_28_days;
+                  const safeDays = r.lead_time_days ?? 28;
+                  const isRisk =
+                    r.is_stock_below_lead_time ??
+                    r.is_stock_below_28_days ??
+                    r.estimated_stock_days < safeDays;
                   const cov = Number(r.estimated_stock_days).toLocaleString("id-ID", {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
@@ -164,13 +212,15 @@ export default function AbcAnalysisPage() {
                       <td>
                         {qty(r.daily_consumption_rate)} {r.uom}
                       </td>
-                      <td>{cov} / 28 hari</td>
+                      <td>
+                        {cov} / {safeDays} hari
+                      </td>
                       <td>
                         <strong>{isRisk ? "Berisiko" : "Aman"}</strong>
                         {isRisk ? (
                           <>
                             <br />
-                            Stok cukup {cov} hari, batas aman 28 hari.
+                            Stok cukup {cov} hari, batas aman {safeDays} hari.
                           </>
                         ) : null}
                       </td>

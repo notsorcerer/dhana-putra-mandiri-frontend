@@ -16,8 +16,9 @@ const STATUS_MAP: Record<string, StatusStyle> = {
   // Dokumen inventori
   draft: { label: "Draft", tone: "warning" },
   confirmed: { label: "Dikonfirmasi", tone: "positive" },
-  // Faktur penjualan
+  // Faktur penjualan & pembayaran hutang
   unpaid: { label: "Belum Dibayar", tone: "warning" },
+  partial: { label: "Dibayar Sebagian", tone: "warning" },
   partially_paid: { label: "Dibayar Sebagian", tone: "warning" },
   paid: { label: "Lunas", tone: "positive" },
   cancelled: { label: "Dibatalkan", tone: "danger" },
@@ -45,6 +46,7 @@ const STATUS_MAP: Record<string, StatusStyle> = {
   EXPENSE: { label: "Beban", tone: "danger" },
   // Tipe pembayaran
   cash: { label: "Kas Tunai", tone: "neutral" },
+  credit: { label: "Tempo / Kredit", tone: "warning" },
   bank_transfer: { label: "Transfer Bank", tone: "neutral" },
   giro: { label: "Giro / Cek", tone: "neutral" },
   // Kategori pembayaran
@@ -54,6 +56,10 @@ const STATUS_MAP: Record<string, StatusStyle> = {
   operational_expense: { label: "Beban Operasional", tone: "danger" },
   other: { label: "Lain-lain", tone: "neutral" },
   // Tipe mutasi karyawan
+  promotion: { label: "Promosi Jabatan", tone: "positive" },
+  demotion: { label: "Demosi Jabatan", tone: "danger" },
+  transfer: { label: "Mutasi Departemen", tone: "info" },
+  salary_adjustment: { label: "Penyesuaian Gaji", tone: "info" },
   PROMOTION: { label: "Promosi Jabatan", tone: "positive" },
   DEMOTION: { label: "Demosi Jabatan", tone: "danger" },
   DEPARTMENT_TRANSFER: { label: "Mutasi Departemen", tone: "info" },
@@ -68,10 +74,13 @@ const STATUS_MAP: Record<string, StatusStyle> = {
   GENERAL: { label: "Catatan Umum", tone: "neutral" },
   // Departemen karyawan
   direksi: { label: "Direksi", tone: "warning" },
+  manajemen: { label: "Manajemen & Direksi", tone: "warning" },
   sales: { label: "Sales & Marketing", tone: "positive" },
-  gudang: { label: "Gudang & Logistik", tone: "warning" },
+  gudang: { label: "Gudang", tone: "warning" },
+  logistik: { label: "Logistik & Pengiriman", tone: "warning" },
   finance: { label: "Finance (Kasir)", tone: "info" },
   accounting: { label: "Accounting & Pajak", tone: "info" },
+  operasional: { label: "Operasional", tone: "neutral" },
   general: { label: "Umum & Operasional", tone: "neutral" },
 };
 

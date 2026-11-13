@@ -12,6 +12,7 @@ export default function AnnualReportPage() {
   const { data, loading, error } = useApi<AnnualReport>(`/finance/reports/annual-report/?year=${year}`);
 
   const summary = data?.summary;
+  const topProducts = data?.product_performance ?? data?.top_products ?? [];
 
   return (
     <div className="space-y-4">
@@ -189,11 +190,11 @@ export default function AnnualReportPage() {
             </section>
           </div>
 
-          {data.top_products && data.top_products.length > 0 ? (
+          {topProducts.length > 0 ? (
             <section className="panel scroll">
               <div className="panelhead">
                 <div>
-                  <h2>5 produk teratas {data.year}</h2>
+                  <h2>Performa produk {data.year}</h2>
                   <p>Diurutkan berdasarkan kontribusi pendapatan.</p>
                 </div>
               </div>
@@ -208,7 +209,7 @@ export default function AnnualReportPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.top_products.map((row) => (
+                  {topProducts.map((row) => (
                     <tr key={row.sku}>
                       <td>
                         <strong>{row.name}</strong>

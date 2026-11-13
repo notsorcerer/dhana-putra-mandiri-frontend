@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/auth";
 import { postDocumentWithItems } from "@/lib/doc-submit";
 import { suggestDocNumber, todayIso } from "@/lib/format";
 import { CAN, can } from "@/lib/menu";
-import type { Customer, Delivery, Product } from "@/types/api";
+import type { Customer, Delivery, Product, SalesInvoice } from "@/types/api";
 
 export default function NewDeliveryPage() {
   const router = useRouter();
@@ -22,18 +22,21 @@ export default function NewDeliveryPage() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     delivery_number: suggestDocNumber("SJ"),
+    sales_invoice: "",
+    customer: "",
     customer_name: "",
     delivery_date: todayIso(),
     driver_name: "",
     vehicle_number: "",
-    sales_order_ref: "",
     notes: "",
   });
   const [items, setItems] = useState<DeliveryItemDraft[]>([emptyDeliveryItem()]);
+  const [invoiceItemMap, setInvoiceItemMap] = useState<Record<number, number>>({});
 
   useEffect(() => {
     fetchAllPages<Product>("/inventory/products/")
@@ -42,10 +45,54 @@ export default function NewDeliveryPage() {
     fetchAllPages<Customer>("/finance/customers/")
       .then(setCustomers)
       .catch(() => undefined);
+    fetchAllPages<SalesInvoice>("/finance/sales-invoices/")
+      .then((list) => setInvoices(list.filter((inv) => !inv.delivery)))
+      .catch(() => undefined);
   }, []);
 
   const set = <K extends keyof typeof form>(key: K, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleInvoiceChange = (invoiceIdStr: string) => {
+    const inv = invoices.find((i) => String(i.id) === invoiceIdStr);
+    if (!inv) {
+      set("sales_invoice", invoiceIdStr);
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      sales_invoice: String(inv.id),
+      customer: inv.customer ? String(inv.customer) : prev.customer,
+      customer_name: inv.customer_name || prev.customer_name,
+    }));
+    if (inv.items && inv.items.length > 0) {
+      const itemMap: Record<number, number> = {};
+      const mapped: DeliveryItemDraft[] = inv.items.map((it) => {
+        const q = String(it.qty_ordered ?? it.qty ?? "1");
+        itemMap[it.product] = it.id;
+        return {
+          product: it.product,
+          qty: q,
+          qty_delivered: q,
+        };
+      });
+      setInvoiceItemMap(itemMap);
+      setItems(mapped);
+    }
+  };
+
+  const handleCustomerSelect = (customerIdStr: string) => {
+    const found = customers.find((c) => String(c.id) === customerIdStr);
+    if (found) {
+      setForm((prev) => ({
+        ...prev,
+        customer: String(found.id),
+        customer_name: found.name,
+      }));
+    } else {
+      setForm((prev) => ({ ...prev, customer: "", customer_name: customerIdStr }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,19 +101,27 @@ export default function NewDeliveryPage() {
     try {
       const payload: Record<string, unknown> = {
         delivery_number: form.delivery_number,
+        ...(form.sales_invoice !== ""
+          ? { sales_invoice: Number(form.sales_invoice) }
+          : {}),
+        ...(form.customer !== "" ? { customer: Number(form.customer) } : {}),
         customer_name: form.customer_name,
         delivery_date: form.delivery_date,
         driver_name: form.driver_name,
         vehicle_number: form.vehicle_number,
-        sales_order_ref: form.sales_order_ref,
         notes: form.notes,
         items: items
           .filter((item) => item.product !== "" && item.qty !== "")
-          .map((item) => ({
-            product: item.product,
-            qty: item.qty,
-            qty_delivered: item.qty_delivered === "" ? item.qty : item.qty_delivered,
-          })),
+          .map((item) => {
+            const prodId = Number(item.product);
+            const invItemId = invoiceItemMap[prodId];
+            return {
+              product: prodId,
+              ...(invItemId ? { sales_invoice_item: invItemId } : {}),
+              qty: item.qty,
+              qty_delivered: item.qty_delivered === "" ? item.qty : item.qty_delivered,
+            };
+          }),
       };
 
       const { data, degraded } = await postDocumentWithItems<Delivery>(
@@ -115,17 +170,32 @@ export default function NewDeliveryPage() {
           />
         </label>
         <label>
+          Faktur penjualan terkait
+          <select
+            value={form.sales_invoice}
+            onChange={(e) => handleInvoiceChange(e.target.value)}
+            required
+          >
+            <option value="">Pilih faktur penjualan</option>
+            {invoices.map((inv) => (
+              <option key={inv.id} value={inv.id}>
+                {inv.invoice_number} · {inv.customer_name || "Internal"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           Mitra
           {customers.length > 0 ? (
             <select
               name="party"
-              value={form.customer_name}
-              onChange={(e) => set("customer_name", e.target.value)}
+              value={form.customer}
+              onChange={(e) => handleCustomerSelect(e.target.value)}
               required
             >
               <option value="">Pilih mitra</option>
               {customers.map((c) => (
-                <option key={c.id} value={c.name}>
+                <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
@@ -146,14 +216,6 @@ export default function NewDeliveryPage() {
             value={form.delivery_number}
             onChange={(e) => set("delivery_number", e.target.value)}
             required
-          />
-        </label>
-        <label>
-          Referensi pesanan (SO)
-          <input
-            value={form.sales_order_ref}
-            onChange={(e) => set("sales_order_ref", e.target.value)}
-            placeholder="Opsional"
           />
         </label>
         <label>

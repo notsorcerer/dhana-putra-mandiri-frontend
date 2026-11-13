@@ -16,6 +16,12 @@ import type { DebitNote, GoodsReceipt } from "@/types/api";
 export default function DebitNotesPage() {
   const { session } = useAuth();
   const canCreate = can(CAN.createDebitNote, session?.role);
+  const canApprove =
+    session?.role === "direktur" || session?.role === "accounting";
+  const canApply =
+    session?.role === "direktur" ||
+    session?.role === "kasir" ||
+    session?.role === "admin";
   const { data, loading, error, page, setPage, totalPages, reload } =
     usePaginated<DebitNote>("/finance/debit-notes/");
 
@@ -25,6 +31,7 @@ export default function DebitNotesPage() {
   const [form, setForm] = useState({
     debit_note_number: suggestDocNumber("DN"),
     goods_receipt: "",
+    supplier: "",
     supplier_name: "",
     date: todayIso(),
     amount: "",
@@ -44,9 +51,10 @@ export default function DebitNotesPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         debit_note_number: form.debit_note_number,
         goods_receipt: Number(form.goods_receipt),
+        ...(form.supplier !== "" ? { supplier: Number(form.supplier) } : {}),
         supplier_name: form.supplier_name,
         date: form.date,
         amount: form.amount,
@@ -63,6 +71,20 @@ export default function DebitNotesPage() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAction = async (row: DebitNote, action: "approve" | "apply") => {
+    try {
+      await apiPost(`/finance/debit-notes/${row.id}/${action}/`);
+      toast.success(
+        action === "approve"
+          ? `Debit Note ${row.debit_note_number} disetujui.`
+          : `Debit Note ${row.debit_note_number} diterapkan ke hutang pemasok.`,
+      );
+      reload();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Gagal memproses dokumen.");
     }
   };
 
@@ -90,7 +112,8 @@ export default function DebitNotesPage() {
     {
       key: "goods_receipt_number",
       header: "Dokumen asal",
-      render: (row) => row.goods_receipt_number || `#${row.goods_receipt}`,
+      render: (row) =>
+        row.receipt_number || row.goods_receipt_number || `#${row.goods_receipt}`,
     },
     {
       key: "amount",
@@ -101,6 +124,32 @@ export default function DebitNotesPage() {
       key: "status",
       header: "Status",
       render: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: "actions",
+      header: "Tindakan",
+      render: (row) => (
+        <div className="flex gap-1.5">
+          {row.status === "draft" && canApprove ? (
+            <button
+              type="button"
+              className="outline"
+              onClick={() => handleAction(row, "approve")}
+            >
+              Setujui
+            </button>
+          ) : null}
+          {row.status === "approved" && canApply ? (
+            <button
+              type="button"
+              className="button"
+              onClick={() => handleAction(row, "apply")}
+            >
+              Terapkan
+            </button>
+          ) : null}
+        </div>
+      ),
     },
   ];
 
@@ -142,6 +191,7 @@ export default function DebitNotesPage() {
                 setForm((p) => ({
                   ...p,
                   goods_receipt: grId,
+                  supplier: gr?.supplier ? String(gr.supplier) : p.supplier,
                   supplier_name: gr?.supplier_name || p.supplier_name,
                 }));
               }}

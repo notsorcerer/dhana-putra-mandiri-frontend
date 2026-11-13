@@ -37,19 +37,32 @@ export default function DeliveryDetailPage() {
   } = useApi<Delivery>(`/inventory/deliveries/${id}/`);
   const [confirming, setConfirming] = useState(false);
   const [conflict, setConflict] = useState<StockConflict | null>(null);
+  const [deliveredQtys, setDeliveredQtys] = useState<Record<number, string>>({});
+
+  const getQtyValue = (itemId: number, fallback: string) =>
+    deliveredQtys[itemId] !== undefined ? deliveredQtys[itemId] : fallback;
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
     setConfirming(true);
     try {
-      await apiPost(`/inventory/deliveries/${id}/confirm/`);
+      const itemsPayload = (delivery?.items ?? []).map((l) => ({
+        id: l.id,
+        qty_delivered: getQtyValue(l.id, l.qty_delivered || l.qty),
+      }));
+      await apiPost(`/inventory/deliveries/${id}/confirm/`, {
+        items: itemsPayload,
+      });
       toast.success(`Status dokumen ${delivery?.delivery_number ?? ""} diperbarui.`);
       setConflict(null);
       reload();
     } catch (err) {
       const isConflict = (err as { status?: number }).status === 409;
       if (isConflict) {
-        const body = (err as { data?: unknown }).data as StockConflict | undefined;
+        const raw = (err as { data?: unknown }).data as
+          | (StockConflict & { details?: StockConflict })
+          | undefined;
+        const body = raw?.details ?? raw;
         if (body && typeof body === "object" && "sku" in body) {
           setConflict(body);
         } else {
@@ -116,7 +129,11 @@ export default function DeliveryDetailPage() {
           Penerima <strong>{delivery.customer_name || "Internal"}</strong>
           <br />
           Referensi faktur{" "}
-          <strong>{delivery.sales_order_ref || delivery.delivery_number}</strong>
+          <strong>
+            {delivery.invoice_number ||
+              delivery.sales_order_ref ||
+              delivery.delivery_number}
+          </strong>
         </p>
         <table>
           <thead>
@@ -161,12 +178,19 @@ export default function DeliveryDetailPage() {
           </label>
           {delivery.items.map((l) => (
             <label key={l.id}>
-              {l.product_sku} · jumlah diserahkan
+              {l.product_sku} · jumlah diserahkan (pesan: {qty(l.qty)})
               <input
                 type="number"
-                min="1"
-                defaultValue={l.qty_delivered || l.qty}
-                readOnly
+                min="0"
+                step="any"
+                value={getQtyValue(l.id, l.qty_delivered || l.qty)}
+                onChange={(e) =>
+                  setDeliveredQtys((prev) => ({
+                    ...prev,
+                    [l.id]: e.target.value,
+                  }))
+                }
+                required
               />
             </label>
           ))}

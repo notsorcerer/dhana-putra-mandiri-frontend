@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { PageHeader } from "@/components/app/page-header";
-import { StatusBadge } from "@/components/app/status-badge";
+import { StatusBadge, statusLabel } from "@/components/app/status-badge";
 import { ApiError, apiPost, fetchAllPages } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { dateId, rupiah, todayIso } from "@/lib/format";
@@ -19,11 +19,10 @@ import type { Employee, EmployeeMutation } from "@/types/api";
 import { DEPARTMENT_OPTIONS } from "../employees/employee-form";
 
 const MUTATION_TYPE_OPTIONS = [
-  { value: "PROMOTION", label: "Promosi Jabatan" },
-  { value: "DEMOTION", label: "Demosi Jabatan" },
-  { value: "DEPARTMENT_TRANSFER", label: "Mutasi Departemen" },
-  { value: "SALARY_ADJUSTMENT", label: "Penyesuaian Gaji" },
-  { value: "STATUS_CHANGE", label: "Perubahan Status" },
+  { value: "promotion", label: "Promosi Jabatan" },
+  { value: "demotion", label: "Demosi Jabatan" },
+  { value: "transfer", label: "Mutasi Departemen" },
+  { value: "salary_adjustment", label: "Penyesuaian Gaji" },
 ];
 
 const HR_TABS: { href: string; label: string; roles: readonly Role[] }[] = [
@@ -35,7 +34,7 @@ const HR_TABS: { href: string; label: string; roles: readonly Role[] }[] = [
 
 export default function EmployeeMutationsPage() {
   const { session } = useAuth();
-  const canManage = can(CAN.manageHr, session?.role);
+  const canManage = can(CAN.manageMutations, session?.role);
   const { data, loading, error, page, setPage, totalPages, reload } = usePaginated<EmployeeMutation>(
     "/hr/mutations/",
   );
@@ -46,7 +45,8 @@ export default function EmployeeMutationsPage() {
   const [form, setForm] = useState({
     employee: "",
     mutation_date: todayIso(),
-    mutation_type: "PROMOTION",
+    effective_date: todayIso(),
+    mutation_type: "promotion",
     previous_department: "",
     new_department: "",
     previous_position: "",
@@ -88,13 +88,15 @@ export default function EmployeeMutationsPage() {
       const created = await apiPost<EmployeeMutation>("/hr/mutations/", {
         ...form,
         employee: Number(form.employee),
+        effective_date: form.effective_date || form.mutation_date,
       });
       toast.success(`Mutasi ${created.employee_name} berhasil dicatat.`);
       setOpen(false);
       setForm({
         employee: "",
         mutation_date: todayIso(),
-        mutation_type: "PROMOTION",
+        effective_date: todayIso(),
+        mutation_type: "promotion",
         previous_department: "",
         new_department: "",
         previous_position: "",
@@ -219,7 +221,8 @@ export default function EmployeeMutationsPage() {
               <option value="">— pilih karyawan —</option>
               {employees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
-                  {employee.employee_id} · {employee.full_name} ({employee.department_display})
+                  {employee.employee_id} · {employee.full_name} (
+                  {employee.department_display ?? statusLabel(employee.department)})
                 </option>
               ))}
             </select>
@@ -232,7 +235,24 @@ export default function EmployeeMutationsPage() {
               type="date"
               required
               value={form.mutation_date}
-              onChange={(e) => setForm((p) => ({ ...p, mutation_date: e.target.value }))}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  mutation_date: e.target.value,
+                  effective_date: p.effective_date || e.target.value,
+                }))
+              }
+            />
+          </label>
+
+          <label htmlFor="mut-eff-date">
+            Tanggal efektif *
+            <Input
+              id="mut-eff-date"
+              type="date"
+              required
+              value={form.effective_date}
+              onChange={(e) => setForm((p) => ({ ...p, effective_date: e.target.value }))}
             />
           </label>
 

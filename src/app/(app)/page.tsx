@@ -60,12 +60,16 @@ export default function DashboardPage() {
   );
 
   const stockRows = stock.data ?? [];
-  const lowStock = stockRows.filter((row) => row.is_stock_below_28_days);
+  const isRowRisk = (row: StockEstimationRow) =>
+    row.is_stock_below_lead_time ??
+    row.is_stock_below_28_days ??
+    row.estimated_stock_days < (row.lead_time_days ?? 28);
+  const lowStock = stockRows.filter(isRowRisk);
 
   const priorities = [...stockRows]
     .sort((a, b) => {
-      const aRisk = a.is_stock_below_28_days ? 0 : 1;
-      const bRisk = b.is_stock_below_28_days ? 0 : 1;
+      const aRisk = isRowRisk(a) ? 0 : 1;
+      const bRisk = isRowRisk(b) ? 0 : 1;
       if (aRisk !== bRisk) return aRisk - bRisk;
       return a.abc_class.localeCompare(b.abc_class);
     })
@@ -360,7 +364,7 @@ export default function DashboardPage() {
                           })} hari`
                         : "—"}
                     </td>
-                    <td>{r.is_stock_below_28_days ? "Berisiko" : "Aman"}</td>
+                    <td>{isRowRisk(r) ? "Berisiko" : "Aman"}</td>
                   </tr>
                 ))}
               </tbody>

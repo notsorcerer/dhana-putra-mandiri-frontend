@@ -66,13 +66,16 @@ export default function NewPaymentPage() {
     fetchAllPages<ChartOfAccounts>("/finance/chart-of-accounts/")
       .then((rows) =>
         setCoa(
-          rows.filter(
-            (acc) =>
+          rows.filter((acc) => {
+            if (acc.is_cash_bank) return true;
+            const code = acc.account_code ?? acc.code ?? "";
+            return (
               acc.account_type === "ASSET" &&
-              acc.code.startsWith("11") &&
-              acc.code !== "1130" &&
-              acc.code !== "1140",
-          ),
+              code.startsWith("11") &&
+              code !== "1130" &&
+              code !== "1140"
+            );
+          }),
         ),
       )
       .catch(() => toast.error("Gagal memuat daftar akun kas/bank."));
@@ -89,13 +92,22 @@ export default function NewPaymentPage() {
             (inv) =>
               inv.status !== "paid" &&
               inv.status !== "cancelled" &&
-              num(inv.total_amount) > 0,
+              inv.status !== "draft" &&
+              num(inv.remaining_due ?? inv.total_amount) > 0,
           ),
         ),
       )
       .catch(() => undefined);
     fetchAllPages<GoodsReceipt>("/inventory/goods-receipts/")
-      .then(setReceipts)
+      .then((rows) =>
+        setReceipts(
+          rows.filter(
+            (gr) =>
+              gr.status === "confirmed" &&
+              gr.payment_status !== "paid",
+          ),
+        ),
+      )
       .catch(() => undefined);
   }, []);
 
@@ -122,6 +134,7 @@ export default function NewPaymentPage() {
     try {
       const payload: Record<string, unknown> = {
         payment_number: form.payment_number,
+        payment_method: form.payment_type,
         payment_type: form.payment_type,
         category: form.category,
         cash_bank_account: Number(form.cash_bank_account),
@@ -130,12 +143,12 @@ export default function NewPaymentPage() {
         reference_number: form.reference_number,
         notes: form.notes,
       };
-      if (form.category === "customer_receipt" && form.customer !== "") {
-        payload.customer = Number(form.customer);
+      if (form.category === "customer_receipt") {
+        if (form.customer !== "") payload.customer = Number(form.customer);
         if (form.sales_invoice !== "") payload.sales_invoice = Number(form.sales_invoice);
       }
-      if (form.category === "supplier_payment" && form.supplier !== "") {
-        payload.supplier = Number(form.supplier);
+      if (form.category === "supplier_payment") {
+        if (form.supplier !== "") payload.supplier = Number(form.supplier);
         if (form.goods_receipt !== "") payload.goods_receipt = Number(form.goods_receipt);
       }
 
@@ -201,7 +214,7 @@ export default function NewPaymentPage() {
             <option value="">Pilih akun</option>
             {coa.map((acc) => (
               <option key={acc.id} value={acc.id}>
-                {acc.code} · {acc.name}
+                {acc.account_code ?? acc.code} · {acc.name}
               </option>
             ))}
           </select>
@@ -261,10 +274,23 @@ export default function NewPaymentPage() {
             <label>
               Dokumen asal (faktur)
               <select
+                required
                 value={form.sales_invoice}
-                onChange={(e) => set("sales_invoice", e.target.value)}
+                onChange={(e) => {
+                  const invId = e.target.value;
+                  const inv = invoices.find((i) => String(i.id) === invId);
+                  setForm((prev) => ({
+                    ...prev,
+                    sales_invoice: invId,
+                    customer: inv?.customer ? String(inv.customer) : prev.customer,
+                    amount:
+                      inv && prev.amount === ""
+                        ? String(inv.remaining_due ?? inv.total_amount)
+                        : prev.amount,
+                  }));
+                }}
               >
-                <option value="">Tanpa referensi faktur</option>
+                <option value="">Pilih faktur penjualan</option>
                 {invoices
                   .filter(
                     (inv) =>
@@ -274,7 +300,7 @@ export default function NewPaymentPage() {
                   .map((inv) => (
                     <option key={inv.id} value={inv.id}>
                       {inv.invoice_number} · {inv.customer_name || "Internal"} ·{" "}
-                      {rupiah(inv.total_amount)}
+                      {rupiah(inv.remaining_due ?? inv.total_amount)}
                     </option>
                   ))}
               </select>
@@ -287,7 +313,6 @@ export default function NewPaymentPage() {
             <label>
               Pemasok
               <select
-                required
                 value={form.supplier}
                 onChange={(e) => set("supplier", e.target.value)}
               >
@@ -302,15 +327,37 @@ export default function NewPaymentPage() {
             <label>
               Dokumen asal (penerimaan)
               <select
+                required
                 value={form.goods_receipt}
-                onChange={(e) => set("goods_receipt", e.target.value)}
+                onChange={(e) => {
+                  const grId = e.target.value;
+                  const gr = receipts.find((r) => String(r.id) === grId);
+                  setForm((prev) => ({
+                    ...prev,
+                    goods_receipt: grId,
+                    supplier: gr?.supplier ? String(gr.supplier) : prev.supplier,
+                    amount:
+                      gr && prev.amount === "" && gr.net_payable !== undefined
+                        ? String(gr.net_payable)
+                        : prev.amount,
+                  }));
+                }}
               >
-                <option value="">Tanpa referensi penerimaan</option>
-                {receipts.map((gr) => (
-                  <option key={gr.id} value={gr.id}>
-                    {gr.receipt_number} · {gr.supplier_name || "Internal"}
-                  </option>
-                ))}
+                <option value="">Pilih penerimaan barang</option>
+                {receipts
+                  .filter(
+                    (gr) =>
+                      form.supplier === "" ||
+                      String(gr.supplier ?? "") === form.supplier,
+                  )
+                  .map((gr) => (
+                    <option key={gr.id} value={gr.id}>
+                      {gr.receipt_number} · {gr.supplier_name || "Internal"}
+                      {gr.net_payable !== undefined
+                        ? ` · ${rupiah(gr.net_payable)}`
+                        : ""}
+                    </option>
+                  ))}
               </select>
             </label>
           </>

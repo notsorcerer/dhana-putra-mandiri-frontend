@@ -17,6 +17,8 @@ interface SupplierFormValues {
   phone: string;
   email: string;
   address: string;
+  tax_id: string;
+  payment_term_days: number;
   is_active: boolean;
 }
 
@@ -27,6 +29,8 @@ const EMPTY: SupplierFormValues = {
   phone: "",
   email: "",
   address: "",
+  tax_id: "",
+  payment_term_days: 30,
   is_active: true,
 };
 
@@ -38,6 +42,8 @@ function toValues(supplier: Supplier): SupplierFormValues {
     phone: supplier.phone ?? "",
     email: supplier.email ?? "",
     address: supplier.address ?? "",
+    tax_id: supplier.tax_id ?? "",
+    payment_term_days: supplier.payment_term_days ?? 30,
     is_active: supplier.is_active,
   };
 }
@@ -123,7 +129,7 @@ export function SupplierForm({ supplier }: { supplier?: Supplier | null }) {
           placeholder="021-555-111"
         />
       </label>
-      <label className="wide">
+      <label>
         Email
         <Input
           id="sup-email"
@@ -131,6 +137,25 @@ export function SupplierForm({ supplier }: { supplier?: Supplier | null }) {
           value={values.email}
           onChange={(e) => set("email", e.target.value)}
           placeholder="sales@pemasok.co.id"
+        />
+      </label>
+      <label>
+        Termin pembayaran (hari)
+        <Input
+          id="sup-terms"
+          type="number"
+          min="0"
+          value={values.payment_term_days}
+          onChange={(e) => set("payment_term_days", Number(e.target.value) || 0)}
+        />
+      </label>
+      <label className="wide">
+        NPWP / Tax ID
+        <Input
+          id="sup-tax"
+          value={values.tax_id}
+          onChange={(e) => set("tax_id", e.target.value)}
+          placeholder="Opsional"
         />
       </label>
       <label className="wide">

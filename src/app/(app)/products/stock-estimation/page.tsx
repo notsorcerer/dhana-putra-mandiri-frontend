@@ -15,7 +15,11 @@ export default function StockEstimationPage() {
   const sorted = [...(data ?? [])].sort(
     (a, b) => a.estimated_stock_days - b.estimated_stock_days,
   );
-  const belowCount = sorted.filter((r) => r.is_stock_below_28_days).length;
+  const isRowRisk = (r: StockEstimationRow) =>
+    r.is_stock_below_lead_time ??
+    r.is_stock_below_28_days ??
+    r.estimated_stock_days < (r.lead_time_days ?? 28);
+  const belowCount = sorted.filter(isRowRisk).length;
 
   return (
     <div>
@@ -103,9 +107,9 @@ export default function StockEstimationPage() {
                     <td>
                       <span
                         className="status-chip"
-                        data-tone={row.is_stock_below_28_days ? "warning" : "positive"}
+                        data-tone={isRowRisk(row) ? "warning" : "positive"}
                       >
-                        {row.is_stock_below_28_days ? "Berisiko" : "Aman"}
+                        {isRowRisk(row) ? "Berisiko" : "Aman"}
                       </span>
                     </td>
                   </tr>

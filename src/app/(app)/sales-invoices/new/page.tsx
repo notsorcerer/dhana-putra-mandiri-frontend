@@ -14,7 +14,7 @@ import { useAuth } from "@/lib/auth";
 import { postDocumentWithItems } from "@/lib/doc-submit";
 import { rupiah, suggestDocNumber, todayIso } from "@/lib/format";
 import { CAN, can } from "@/lib/menu";
-import type { Customer, Delivery, Product, SalesInvoice } from "@/types/api";
+import type { Customer, Product, SalesInvoice } from "@/types/api";
 
 function isoPlusDays(days: number): string {
   const date = new Date();
@@ -31,16 +31,16 @@ export default function NewSalesInvoicePage() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     invoice_number: suggestDocNumber("INV"),
+    customer: "",
     customer_name: "",
-    delivery: "",
     terms: "Tempo",
     invoice_date: todayIso(),
     due_date: isoPlusDays(30),
+    discount_amount: "0",
     notes: "",
   });
   const [items, setItems] = useState<InvoiceItemDraft[]>([emptyInvoiceItem()]);
@@ -52,16 +52,33 @@ export default function NewSalesInvoicePage() {
     fetchAllPages<Customer>("/finance/customers/")
       .then(setCustomers)
       .catch(() => undefined);
-    fetchAllPages<Delivery>("/inventory/deliveries/")
-      .then(setDeliveries)
-      .catch(() => undefined);
   }, []);
 
   const set = <K extends keyof typeof form>(key: K, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleCustomerChange = (val: string) => {
+    const found = customers.find((c) => String(c.id) === val);
+    if (found) {
+      const due =
+        found.payment_term_days && found.payment_term_days > 0
+          ? isoPlusDays(found.payment_term_days)
+          : form.due_date;
+      setForm((prev) => ({
+        ...prev,
+        customer: String(found.id),
+        customer_name: found.name,
+        due_date: due,
+      }));
+    } else {
+      setForm((prev) => ({ ...prev, customer: "", customer_name: val }));
+    }
+  };
+
   const subtotal = invoiceDraftSubtotal(items);
+  const headerDiscount = Number(form.discount_amount) || 0;
+  const grandTotal = Math.max(0, subtotal - headerDiscount);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,16 +86,18 @@ export default function NewSalesInvoicePage() {
     try {
       const payload: Record<string, unknown> = {
         invoice_number: form.invoice_number,
+        ...(form.customer !== "" ? { customer: Number(form.customer) } : {}),
         customer_name: form.customer_name,
         invoice_date: form.invoice_date,
         due_date: form.terms === "Tunai" ? form.invoice_date : form.due_date,
+        payment_method: form.terms === "Tunai" ? "cash" : "credit",
+        discount_amount: form.discount_amount === "" ? "0.00" : form.discount_amount,
         notes: form.notes,
-        ...(form.delivery !== "" ? { delivery: Number(form.delivery) } : {}),
         items: items
           .filter((item) => item.product !== "" && item.qty !== "")
           .map((item) => ({
             product: item.product,
-            qty: item.qty,
+            qty_ordered: item.qty,
             unit_price: item.unit_price,
             discount_amount:
               item.discount_amount === "" ? "0.00" : item.discount_amount,
@@ -137,13 +156,13 @@ export default function NewSalesInvoicePage() {
           {customers.length > 0 ? (
             <select
               name="party"
-              value={form.customer_name}
-              onChange={(e) => set("customer_name", e.target.value)}
+              value={form.customer}
+              onChange={(e) => handleCustomerChange(e.target.value)}
               required
             >
               <option value="">Pilih mitra</option>
               {customers.map((c) => (
-                <option key={c.id} value={c.name}>
+                <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
@@ -187,18 +206,14 @@ export default function NewSalesInvoicePage() {
           />
         </label>
         <label>
-          Surat jalan terkait
-          <select
-            value={form.delivery}
-            onChange={(e) => set("delivery", e.target.value)}
-          >
-            <option value="">Pilih surat jalan (opsional)</option>
-            {deliveries.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.delivery_number} · {d.customer_name || "Internal"}
-              </option>
-            ))}
-          </select>
+          Diskon faktur (Rp)
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={form.discount_amount}
+            onChange={(e) => set("discount_amount", e.target.value)}
+          />
         </label>
 
         <InvoiceItemsEditor rows={items} onChange={setItems} products={products} />
@@ -215,7 +230,7 @@ export default function NewSalesInvoicePage() {
 
         <div className="draft-total wide">
           <span>Total draf</span>
-          <strong id="draft-total">{subtotal > 0 ? rupiah(subtotal) : "—"}</strong>
+          <strong id="draft-total">{grandTotal > 0 ? rupiah(grandTotal) : "—"}</strong>
         </div>
 
         <div className="wide draft-impact">

@@ -64,7 +64,15 @@ function extractApiMessage(data: unknown, status: number): string {
     const obj = data as Record<string, unknown>;
     if (typeof obj.detail === "string") return obj.detail;
     if (typeof obj.error === "string") return obj.error;
-    if (typeof obj.message === "string") return obj.message;
+    // Format standar baru backend: { code, message, details }
+    if (typeof obj.message === "string") {
+      const genericMsg = "Permintaan tidak valid atau terjadi kesalahan operasional.";
+      if (obj.message !== genericMsg || !obj.details) {
+        return obj.message;
+      }
+      const detailsMsg = extractApiMessage(obj.details, status);
+      return detailsMsg || obj.message;
+    }
     if (typeof obj.detail === "object") {
       return `Permintaan ditolak: ${JSON.stringify(obj.detail)}`;
     }

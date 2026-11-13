@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { PageHeader } from "@/components/app/page-header";
-import { StatusBadge } from "@/components/app/status-badge";
+import { StatusBadge, statusLabel } from "@/components/app/status-badge";
 import { ApiError, apiPost, fetchAllPages } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { dateId, todayIso } from "@/lib/format";
@@ -20,10 +20,8 @@ import type { Employee, LaborRecord } from "@/types/api";
 const RECORD_TYPE_OPTIONS = [
   { value: "ATTENDANCE_NOTE", label: "Catatan Kehadiran" },
   { value: "OVERTIME_LOG", label: "Catatan Lembur" },
-  { value: "INCIDENT", label: "Insiden Kerja" },
   { value: "WARNING_LETTER", label: "Surat Peringatan" },
-  { value: "COMMENDATION", label: "Apresiasi / Prestasi" },
-  { value: "GENERAL", label: "Catatan Umum" },
+  { value: "INCIDENT", label: "Insiden Kerja" },
 ];
 
 const HR_TABS: { href: string; label: string; roles: readonly Role[] }[] = [
@@ -46,10 +44,11 @@ export default function LaborRecordsPage() {
   const [form, setForm] = useState({
     employee: "",
     record_date: todayIso(),
-    record_type: "GENERAL",
+    record_type: "ATTENDANCE_NOTE",
     title: "",
     description: "",
     hours: "",
+    hourly_rate: "",
   });
 
   useEffect(() => {
@@ -67,19 +66,24 @@ export default function LaborRecordsPage() {
     setSaving(true);
     try {
       const created = await apiPost<LaborRecord>("/hr/labor-records/", {
-        ...form,
         employee: Number(form.employee),
+        record_date: form.record_date,
+        record_type: form.record_type,
+        title: form.title,
+        description: form.description,
         hours: form.hours === "" ? "0.00" : form.hours,
+        ...(form.hourly_rate !== "" ? { hourly_rate: form.hourly_rate } : {}),
       });
       toast.success(`Catatan kerja "${created.title}" berhasil disimpan.`);
       setOpen(false);
       setForm({
         employee: "",
         record_date: todayIso(),
-        record_type: "GENERAL",
+        record_type: "ATTENDANCE_NOTE",
         title: "",
         description: "",
         hours: "",
+        hourly_rate: "",
       });
       reload();
     } catch (err) {
@@ -176,7 +180,8 @@ export default function LaborRecordsPage() {
               <option value="">— pilih karyawan —</option>
               {employees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
-                  {employee.employee_id} · {employee.full_name} ({employee.department_display})
+                  {employee.employee_id} · {employee.full_name} (
+                  {employee.department_display ?? statusLabel(employee.department)})
                 </option>
               ))}
             </select>
@@ -230,6 +235,19 @@ export default function LaborRecordsPage() {
               value={form.hours}
               onChange={(e) => setForm((p) => ({ ...p, hours: e.target.value }))}
               placeholder="0"
+            />
+          </label>
+
+          <label htmlFor="lab-rate">
+            Tarif lembur per jam (Rp)
+            <Input
+              id="lab-rate"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.hourly_rate}
+              onChange={(e) => setForm((p) => ({ ...p, hourly_rate: e.target.value }))}
+              placeholder="Opsional"
             />
           </label>
 

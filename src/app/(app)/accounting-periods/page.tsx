@@ -20,6 +20,7 @@ export default function AccountingPeriodsPage() {
   const { session } = useAuth();
   const role = session?.role;
   const canManage = can(CAN.managePeriods, role);
+  const canClose = can(CAN.closePeriods, role);
 
   const { data, loading, error, reload } = usePaginated<AccountingPeriod>(
     "/finance/accounting-periods/",
@@ -43,7 +44,9 @@ export default function AccountingPeriodsPage() {
     setBusy(true);
     try {
       const body: Record<string, unknown> =
-        actionType === "reopen_period" ? { reason: note } : { reason: note };
+        actionType === "close_period"
+          ? { closing_notes: note, reason: note }
+          : { reason: note };
       await apiPost(
         `/finance/accounting-periods/${activePeriod.id}/${actionType}/`,
         body,
@@ -146,7 +149,7 @@ export default function AccountingPeriodsPage() {
                   Ajukan tutup buku
                 </button>
               ) : null}
-              {activePeriod.status !== "CLOSED" ? (
+              {canClose && activePeriod.status !== "CLOSED" ? (
                 <button
                   type="button"
                   disabled={busy}
@@ -155,7 +158,7 @@ export default function AccountingPeriodsPage() {
                   Setujui penutupan
                 </button>
               ) : null}
-              {activePeriod.status === "CLOSED" ? (
+              {canClose && activePeriod.status === "CLOSED" ? (
                 <button
                   type="button"
                   className="secondary"
@@ -215,7 +218,7 @@ export default function AccountingPeriodsPage() {
                         ? `${p.closed_by_name} · ${dateTimeId(p.closed_at)}`
                         : "—"}
                     </td>
-                    <td>{p.reopen_reason || "—"}</td>
+                    <td>{p.closing_notes || p.reopen_reason || "—"}</td>
                   </tr>
                 ))}
               </tbody>

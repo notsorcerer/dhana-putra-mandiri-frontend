@@ -27,9 +27,11 @@ export default function NewGoodsReceiptPage() {
 
   const [form, setForm] = useState({
     receipt_number: suggestDocNumber("GR"),
+    supplier: "",
     supplier_name: "",
-    po_reference: "",
+    payment_method: "credit",
     receipt_date: todayIso(),
+    due_date: "",
     transport_cost: "0",
     unloading_cost: "0",
     notes: "",
@@ -49,15 +51,30 @@ export default function NewGoodsReceiptPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleSupplierChange = (val: string) => {
+    const found = suppliers.find((s) => String(s.id) === val);
+    if (found) {
+      setForm((prev) => ({
+        ...prev,
+        supplier: String(found.id),
+        supplier_name: found.name,
+      }));
+    } else {
+      setForm((prev) => ({ ...prev, supplier: "", supplier_name: val }));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
         receipt_number: form.receipt_number,
+        ...(form.supplier !== "" ? { supplier: Number(form.supplier) } : {}),
         supplier_name: form.supplier_name,
-        po_reference: form.po_reference,
+        payment_method: form.payment_method,
         receipt_date: form.receipt_date,
+        ...(form.due_date !== "" ? { due_date: form.due_date } : {}),
         notes: form.notes,
         items: items
           .filter((item) => item.product !== "" && item.qty_ordered !== "")
@@ -128,13 +145,13 @@ export default function NewGoodsReceiptPage() {
           {suppliers.length > 0 ? (
             <select
               name="party"
-              value={form.supplier_name}
-              onChange={(e) => set("supplier_name", e.target.value)}
+              value={form.supplier}
+              onChange={(e) => handleSupplierChange(e.target.value)}
               required
             >
               <option value="">Pilih mitra</option>
               {suppliers.map((s) => (
-                <option key={s.id} value={s.name}>
+                <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
               ))}
@@ -158,13 +175,25 @@ export default function NewGoodsReceiptPage() {
           />
         </label>
         <label>
-          Referensi PO
-          <input
-            value={form.po_reference}
-            onChange={(e) => set("po_reference", e.target.value)}
-            placeholder="Opsional"
-          />
+          Metode pembayaran
+          <select
+            value={form.payment_method}
+            onChange={(e) => set("payment_method", e.target.value)}
+          >
+            <option value="credit">Tempo / Kredit</option>
+            <option value="cash">Tunai</option>
+          </select>
         </label>
+        {form.payment_method === "credit" ? (
+          <label>
+            Jatuh tempo hutang
+            <input
+              type="date"
+              value={form.due_date}
+              onChange={(e) => set("due_date", e.target.value)}
+            />
+          </label>
+        ) : null}
         {showCost ? (
           <>
             <label>

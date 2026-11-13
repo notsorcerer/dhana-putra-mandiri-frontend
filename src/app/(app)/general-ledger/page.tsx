@@ -5,18 +5,32 @@ import Link from "next/link";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { PageHeader } from "@/components/app/page-header";
 import { PeriodFilter } from "@/components/app/period-filter";
-import { dateId, rupiah } from "@/lib/format";
+import { dateId, num, rupiah } from "@/lib/format";
 import { usePaginated } from "@/lib/use-api";
 import type { GeneralLedger } from "@/types/api";
 
 const REFERENCE_LABELS: Record<string, string> = {
+  DELIVERY: "Surat Jalan",
   SALES_DELIVERY: "Surat Jalan",
   GOODS_RECEIPT: "Penerimaan Barang",
   DEBIT_NOTE: "Debit Note",
   PAYMENT: "Mutasi Kas/Bank",
   PAYROLL: "Payroll",
+  PAYROLL_ACCRUAL: "Akrual Gaji",
+  PAYROLL_PAYMENT: "Pembayaran Gaji",
+  INVOICE_REVISION: "Revisi Faktur",
   MANUAL: "Penyesuaian Manual",
 };
+
+function sumDebit(row: GeneralLedger): number {
+  if (row.total_debit !== undefined) return row.total_debit;
+  return (row.lines ?? []).reduce((acc, l) => acc + num(l.debit), 0);
+}
+
+function sumCredit(row: GeneralLedger): number {
+  if (row.total_credit !== undefined) return row.total_credit;
+  return (row.lines ?? []).reduce((acc, l) => acc + num(l.credit), 0);
+}
 
 export default function GeneralLedgerPage() {
   const { data, loading, error, page, setPage, totalPages } =
@@ -25,7 +39,7 @@ export default function GeneralLedgerPage() {
 
   const columns: Column<GeneralLedger>[] = [
     {
-      key: "entry_number",
+      key: "transaction_number",
       header: "Dokumen",
       render: (row) => (
         <a
@@ -36,14 +50,14 @@ export default function GeneralLedgerPage() {
             setSelected(row);
           }}
         >
-          {row.entry_number}
+          {row.transaction_number ?? row.entry_number}
         </a>
       ),
     },
     {
-      key: "transaction_date",
+      key: "date",
       header: "Tanggal",
-      render: (row) => dateId(row.transaction_date),
+      render: (row) => dateId(row.date ?? row.transaction_date),
     },
     {
       key: "reference_type",
@@ -58,24 +72,28 @@ export default function GeneralLedgerPage() {
     {
       key: "total_debit",
       header: "Debit (Rp)",
-      render: (row) => rupiah(row.total_debit),
+      render: (row) => rupiah(sumDebit(row)),
     },
     {
       key: "total_credit",
       header: "Kredit (Rp)",
-      render: (row) => rupiah(row.total_credit),
+      render: (row) => rupiah(sumCredit(row)),
     },
     {
       key: "is_balanced",
       header: "Status",
-      render: (row) => (
-        <span
-          className="status-chip"
-          data-tone={row.is_balanced ? "positive" : "danger"}
-        >
-          {row.is_balanced ? "Dibukukan" : "Selisih"}
-        </span>
-      ),
+      render: (row) => {
+        const balanced =
+          row.is_balanced ?? Math.abs(sumDebit(row) - sumCredit(row)) < 0.01;
+        return (
+          <span
+            className="status-chip"
+            data-tone={balanced ? "positive" : "danger"}
+          >
+            {balanced ? "Dibukukan" : "Selisih"}
+          </span>
+        );
+      },
     },
   ];
 
@@ -99,7 +117,8 @@ export default function GeneralLedgerPage() {
             <div>
               <small>RINCIAN JURNAL TRANSAKSI</small>
               <h2>
-                {selected.entry_number} · {dateId(selected.transaction_date)}
+                {selected.transaction_number ?? selected.entry_number} ·{" "}
+                {dateId(selected.date ?? selected.transaction_date)}
               </h2>
               <p>
                 {REFERENCE_LABELS[selected.reference_type] ?? selected.reference_type} ·{" "}

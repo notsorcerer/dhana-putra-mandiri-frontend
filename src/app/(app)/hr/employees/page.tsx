@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { PageHeader } from "@/components/app/page-header";
-import { StatusBadge } from "@/components/app/status-badge";
+import { StatusBadge, statusLabel } from "@/components/app/status-badge";
 import { useAuth } from "@/lib/auth";
 import { dateId, rupiah } from "@/lib/format";
 import { CAN, can, type Role } from "@/lib/menu";
@@ -75,7 +75,11 @@ export default function EmployeesPage() {
       key: "base_salary",
       header: "Gaji Pokok",
       className: "text-right",
-      render: (row) => <span className="tabular-nums">{rupiah(row.base_salary)}</span>,
+      render: (row) => (
+        <span className="tabular-nums">
+          {row.base_salary !== undefined ? rupiah(row.base_salary) : "Dirahasiakan"}
+        </span>
+      ),
     },
     {
       key: "joined_date",
@@ -142,7 +146,8 @@ export default function EmployeesPage() {
                 {detail.full_name} ({detail.employee_id})
               </h2>
               <p>
-                {detail.department_display} · {detail.position} · Masuk {dateId(detail.joined_date)}
+                {detail.department_display ?? statusLabel(detail.department)} ·{" "}
+                {detail.position} · Masuk {dateId(detail.joined_date)}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -168,11 +173,19 @@ export default function EmployeesPage() {
             </div>
             <div>
               <span>Gaji Pokok</span>
-              <strong>{rupiah(detail.base_salary)}</strong>
+              <strong>
+                {detail.base_salary !== undefined
+                  ? rupiah(detail.base_salary)
+                  : "Dirahasiakan"}
+              </strong>
             </div>
             <div>
               <span>Tunjangan Standar</span>
-              <strong>{rupiah(detail.standard_allowance)}</strong>
+              <strong>
+                {detail.standard_allowance !== undefined
+                  ? rupiah(detail.standard_allowance)
+                  : "Dirahasiakan"}
+              </strong>
             </div>
             <div>
               <span>Bank & Rekening</span>
@@ -187,7 +200,7 @@ export default function EmployeesPage() {
             </div>
           </div>
 
-          {detail.mutations.length > 0 ? (
+          {(detail.mutations ?? []).length > 0 ? (
             <table>
               <thead>
                 <tr>
@@ -199,11 +212,13 @@ export default function EmployeesPage() {
                 </tr>
               </thead>
               <tbody>
-                {detail.mutations.map((m) => (
+                {(detail.mutations ?? []).map((m) => (
                   <tr key={m.id}>
                     <td>{dateId(m.mutation_date)}</td>
                     <td>
-                      <strong>{m.mutation_type_display}</strong>
+                      <strong>
+                        {m.mutation_type_display ?? statusLabel(m.mutation_type)}
+                      </strong>
                     </td>
                     <td>
                       {m.previous_position || "-"} → {m.new_position || "-"}
