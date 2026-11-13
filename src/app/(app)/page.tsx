@@ -1,18 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Banknote, Boxes, Landmark, TrendingUp, Wallet } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PageHeader } from "@/components/app/page-header";
-import { StatusBadge } from "@/components/app/status-badge";
-import { DistributionPieChart, SalesTrendChart } from "@/components/app/charts";
-import { KpiCard } from "@/components/app/kpi-card";
+import { SalesTrendChart } from "@/components/app/charts";
+import { PeriodFilter } from "@/components/app/period-filter";
+import { GradeBadge, StatusBadge } from "@/components/app/status-badge";
+import { SvgIcon, type SpriteIconName } from "@/components/app/svg-sprites";
 import { useAuth } from "@/lib/auth";
+import { dateId, qty, rupiah } from "@/lib/format";
 import { CAN, can } from "@/lib/menu";
-import { num, qty, rupiah } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
-import type { BalanceSheet, PieChartsReport, StockEstimationRow, SalesTrendsReport } from "@/types/api";
+import type {
+  BalanceSheet,
+  Delivery,
+  Paginated,
+  SalesInvoice,
+  SalesTrendsReport,
+  StockEstimationRow,
+} from "@/types/api";
+
+interface Metric {
+  label: string;
+  value: string;
+  scope: string;
+  icon: SpriteIconName;
+  href: string;
+}
+
+interface AlertRow {
+  icon: SpriteIconName;
+  label: string;
+  value: string;
+  caption: string;
+  href: string;
+}
+
+const TODAY_LONG = new Intl.DateTimeFormat("id-ID", {
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+}).format(new Date());
 
 export default function DashboardPage() {
   const { session } = useAuth();
@@ -20,187 +46,328 @@ export default function DashboardPage() {
   const showFinancial = can(CAN.viewFinancialValues, role);
 
   const balance = useApi<BalanceSheet>(showFinancial ? "/finance/reports/balance-sheet/" : null);
-  const trends = useApi<SalesTrendsReport>(role === "gudang" ? null : "/finance/reports/sales-trends/");
-  const pie = useApi<PieChartsReport>(showFinancial ? "/finance/reports/pie-charts/" : null);
-  const stock = useApi<StockEstimationRow[]>(role === null ? null : "/inventory/products/stock-estimation/");
+  const trends = useApi<SalesTrendsReport>(
+    role === "gudang" ? null : "/finance/reports/sales-trends/",
+  );
+  const stock = useApi<StockEstimationRow[]>(
+    role === null ? null : "/inventory/products/stock-estimation/",
+  );
+  const recentInvoices = useApi<Paginated<SalesInvoice>>(
+    role === "gudang" ? null : "/finance/sales-invoices/?page=1",
+  );
+  const recentDeliveries = useApi<Paginated<Delivery>>(
+    role ? "/inventory/deliveries/?page=1" : null,
+  );
 
-  const lowStock = (stock.data ?? [])
-    .filter((row) => row.is_stock_below_28_days)
-    .sort((a, b) => a.estimated_stock_days - b.estimated_stock_days)
-    .slice(0, 8);
+  const stockRows = stock.data ?? [];
+  const lowStock = stockRows.filter((row) => row.is_stock_below_28_days);
+
+  const priorities = [...stockRows]
+    .sort((a, b) => {
+      const aRisk = a.is_stock_below_28_days ? 0 : 1;
+      const bRisk = b.is_stock_below_28_days ? 0 : 1;
+      if (aRisk !== bRisk) return aRisk - bRisk;
+      return a.abc_class.localeCompare(b.abc_class);
+    })
+    .slice(0, 5);
 
   const bs = balance.data;
-  const kasBank = bs ? num(bs.assets.kas_dan_bank.subtotal) : 0;
-  const labaBerjalan = bs ? num(bs.equity.laba_periode_berjalan) : 0;
+  const totalSales = (trends.data?.trends ?? []).reduce(
+    (sum, point) => sum + point.total_sales,
+    0,
+  );
+  const totalGross = (trends.data?.trends ?? []).reduce(
+    (sum, point) => sum + point.gross_profit,
+    0,
+  );
+
+  const draftDeliveries = (recentDeliveries.data?.results ?? []).filter(
+    (d) => d.status === "draft",
+  ).length;
+  const unpaidInvoices = (recentInvoices.data?.results ?? []).filter(
+    (inv) => inv.status === "unpaid" || inv.status === "partially_paid",
+  ).length;
+
+  const metrics: Metric[] = showFinancial
+    ? [
+        {
+          label: "Penjualan bersih",
+          value: trends.data ? rupiah(totalSales) : "Memuat…",
+          scope: "Periode pilihan",
+          icon: "sales",
+          href: "/reports/sales-trends",
+        },
+        {
+          label: "Laba kotor",
+          value: trends.data ? rupiah(totalGross) : "Memuat…",
+          scope: "Periode pilihan",
+          icon: "layers",
+          href: "/reports/sales-trends",
+        },
+        {
+          label: "Laba bersih",
+          value: bs ? rupiah(bs.equity.laba_periode_berjalan) : "Memuat…",
+          scope: "Periode pilihan",
+          icon: "trend",
+          href: "/reports/balance-sheet",
+        },
+        {
+          label: "Kas & bank",
+          value: bs ? rupiah(bs.assets.kas_dan_bank.subtotal) : "Memuat…",
+          scope: "Posisi akhir",
+          icon: "wallet",
+          href: "/payments",
+        },
+      ]
+    : [
+        {
+          label: "Dokumen tercatat",
+          value: recentDeliveries.data
+            ? qty(recentDeliveries.data.count)
+            : qty(stockRows.length),
+          scope: "Periode pilihan",
+          icon: "doc",
+          href: role === "gudang" ? "/deliveries" : "/sales-invoices",
+        },
+        {
+          label: "Menunggu proses",
+          value: qty(draftDeliveries),
+          scope: "Draf periode",
+          icon: "clock",
+          href: "/deliveries",
+        },
+        {
+          label: "Risiko stok",
+          value: stock.data ? qty(lowStock.length) : "Memuat…",
+          scope: "Produk dipantau",
+          icon: "box",
+          href: "/products/abc-analysis",
+        },
+      ];
+
+  const alerts: AlertRow[] = [];
+  if (role !== "gudang") {
+    alerts.push({
+      icon: "receipt",
+      label: "Piutang lewat tempo",
+      value: bs ? rupiah(bs.assets.piutang_usaha) : `${unpaidInvoices} faktur`,
+      caption: "Tagihan belum lunas",
+      href: "/reports/balance-sheet",
+    });
+  }
+  if (role !== "sales") {
+    alerts.push({
+      icon: "box",
+      label: "Risiko kehabisan stok",
+      value: `${lowStock.length} produk`,
+      caption: "Stok di bawah estimasi aman",
+      href: "/products/abc-analysis",
+    });
+  }
+  alerts.push({
+    icon: "truck",
+    label: "Menunggu pengiriman",
+    value: `${draftDeliveries} dokumen`,
+    caption: "Pesanan siap diserahkan",
+    href: "/deliveries",
+  });
+
+  const prompt =
+    role === "gudang"
+      ? { label: "Catat penerimaan", href: "/goods-receipts/new" }
+      : role === "kasir" || role === "accounting"
+        ? { label: "Catat mutasi", href: "/payments/new" }
+        : can(CAN.createInvoice, role)
+          ? { label: "Buat faktur", href: "/sales-invoices/new" }
+          : null;
+
+  const recentDocs =
+    role === "gudang"
+      ? (recentDeliveries.data?.results ?? []).slice(0, 6).map((d) => ({
+          id: `del-${d.id}`,
+          number: d.delivery_number,
+          href: `/deliveries/${d.id}`,
+          date: d.delivery_date,
+          kind: "Pengiriman",
+          party: d.customer_name || "Internal",
+          status: d.status,
+        }))
+      : (recentInvoices.data?.results ?? []).slice(0, 6).map((inv) => ({
+          id: `inv-${inv.id}`,
+          number: inv.invoice_number,
+          href: `/sales-invoices/${inv.id}`,
+          date: inv.invoice_date,
+          kind: "Penjualan",
+          party: inv.customer_name || "Internal",
+          status: inv.status,
+        }));
+
+  const showChart = showFinancial && trends.data !== null && trends.data.trends.length > 0;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Dashboard"
-        description={`Ringkasan performa distribusi minyak goreng — peran: ${session?.label ?? "-"}.`}
-      />
-
-      {showFinancial ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard
-            title="Kas & Bank"
-            value={balance.loading && !bs ? "Memuat…" : rupiah(kasBank)}
-            hint="Saldo akun kas tunai dan bank"
-            icon={<Wallet className="size-5" />}
-          />
-          <KpiCard
-            title="Total Aktiva"
-            value={bs ? rupiah(bs.assets.total_assets) : "Memuat…"}
-            hint={bs ? `Persediaan ${rupiah(bs.assets.persediaan_barang_dagang)}` : undefined}
-            icon={<Banknote className="size-5" />}
-          />
-          <KpiCard
-            title="Total Kewajiban"
-            value={bs ? rupiah(bs.liabilities.total_liabilities) : "Memuat…"}
-            hint={bs ? `Hutang usaha ${rupiah(bs.liabilities.hutang_usaha_supplier)}` : undefined}
-            icon={<Landmark className="size-5" />}
-          />
-          <KpiCard
-            title="Laba Periode Berjalan"
-            value={bs ? rupiah(labaBerjalan) : "Memuat…"}
-            tone={labaBerjalan >= 0 ? "positive" : "negative"}
-            hint="Laba kotor dikurangi beban operasional"
-            icon={<TrendingUp className="size-5" />}
-          />
+    <>
+      <header className="pagehead overview-head">
+        <div>
+          <h1>Ringkasan operasional</h1>
+          <p>CV Dhana Putra Mandiri</p>
         </div>
-      ) : null}
-
-      <div className="grid gap-4 lg:grid-cols-5">
-        {trends.data ? (
-          <div className="lg:col-span-3">
-            <SalesTrendChart trends={trends.data.trends} />
-          </div>
-        ) : null}
-
-        <div className="space-y-4 lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="size-5 text-amber-500" />
-                Stok di Bawah 28 Hari
-              </CardTitle>
-              <CardDescription>
-                Produk dengan estimasi stok &lt; 28 hari berdasarkan konsumsi harian.{" "}
-                <Link href="/products/stock-estimation" className="text-primary underline-offset-4 hover:underline">
-                  Lihat semua
-                </Link>
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {stock.loading && stock.data === null ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">Memuat…</p>
-              ) : stock.error ? (
-                <p className="py-8 text-center text-sm text-destructive">{stock.error}</p>
-              ) : lowStock.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Tidak ada produk dengan stok di bawah 28 hari.
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Produk</TableHead>
-                      <TableHead className="text-right">Stok</TableHead>
-                      <TableHead className="text-right">Estimasi</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {lowStock.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>
-                          <p className="font-medium">{row.name}</p>
-                          <p className="text-xs text-muted-foreground">{row.sku}</p>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {qty(row.current_stock)} {row.uom}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums ${
-                              row.estimated_stock_days <= 14
-                                ? "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
-                                : "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
-                            }`}
-                          >
-                            {qty(row.estimated_stock_days)} hari
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+        <div className="inline-actions">
+          <PeriodFilter />
+          {prompt ? (
+            <Link className="button" href={prompt.href}>
+              + {prompt.label}
+            </Link>
+          ) : null}
         </div>
+      </header>
+
+      <div className="metric-grid">
+        {metrics.map((metric, idx) => (
+          <Link key={metric.label} className={`metric metric-${idx + 1}`} href={metric.href}>
+            <div>
+              <span className="metric-icon">
+                <SvgIcon name={metric.icon} />
+              </span>
+              <span>{metric.label}</span>
+              <span className="metric-open">↗</span>
+            </div>
+            <strong>{metric.value}</strong>
+            <small>{metric.scope}</small>
+          </Link>
+        ))}
       </div>
 
-      {pie.data ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <DistributionPieChart
-            title="Distribusi Nilai Stok per Merek"
-            description={`Total nilai persediaan: ${rupiah(pie.data.total_portfolio_value)}`}
-            data={pie.data.brand_distribution}
-          />
-          <DistributionPieChart
-            title="Distribusi Nilai Stok per Kemasan"
-            description="Proporsi nilai persediaan berdasarkan ukuran kemasan"
-            data={pie.data.package_size_distribution}
-          />
-        </div>
-      ) : null}
+      <div className="workgrid">
+        {showChart ? <SalesTrendChart trends={trends.data!.trends} /> : null}
 
-      {stock.data && stock.data.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Boxes className="size-5 text-primary" />
-              Estimasi Seluruh Produk
-            </CardTitle>
-            <CardDescription>Ringkasan stok, konsumsi harian, dan kelas ABC</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Produk</TableHead>
-                  <TableHead>Kelas</TableHead>
-                  <TableHead className="text-right">Stok</TableHead>
-                  <TableHead className="text-right">Konsumsi/hari</TableHead>
-                  <TableHead className="text-right">Estimasi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {[...stock.data]
-                  .sort((a, b) => a.estimated_stock_days - b.estimated_stock_days)
-                  .map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>
-                        <p className="font-medium">{row.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {row.brand} · {row.package_size}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={row.abc_class} />
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {qty(row.current_stock)} {row.uom}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{qty(row.daily_consumption_rate)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{qty(row.estimated_stock_days)} hari</TableCell>
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <section className="panel actionpanel">
+          <div className="panelhead">
+            <div>
+              <h2>Perlu ditindaklanjuti</h2>
+              <p>Posisi per {TODAY_LONG}</p>
+            </div>
+          </div>
+          {alerts.map((alert) => (
+            <Link key={alert.label} className="actionrow" href={alert.href}>
+              <span className={`actionicon ai-${alert.icon}`}>
+                <SvgIcon name={alert.icon} />
+              </span>
+              <span>
+                <b>{alert.label}</b>
+                <small>{alert.caption}</small>
+              </span>
+              <strong>{alert.value}</strong>
+              <span className="chev">›</span>
+            </Link>
+          ))}
+        </section>
+      </div>
+
+      <section className="panel recent">
+        <div className="panelhead">
+          <div>
+            <h2>Transaksi terbaru</h2>
+            <p>Dokumen pada periode pilihan</p>
+          </div>
+          <Link
+            className="outline"
+            href={role === "gudang" ? "/deliveries" : "/sales-invoices"}
+          >
+            Semua dokumen <span>→</span>
+          </Link>
+        </div>
+        <div className="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Nomor dokumen</th>
+                <th>Tanggal</th>
+                <th>Jenis transaksi</th>
+                <th>Mitra</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentDocs.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>
+                    Belum ada dokumen pada periode ini. Pilih periode lain untuk melihat transaksi.
+                  </td>
+                </tr>
+              ) : (
+                recentDocs.map((doc) => (
+                  <tr key={doc.id}>
+                    <td>
+                      <Link className="doc-number" href={doc.href}>
+                        {doc.number}
+                      </Link>
+                    </td>
+                    <td>{dateId(doc.date)}</td>
+                    <td>{doc.kind}</td>
+                    <td>{doc.party}</td>
+                    <td>
+                      <StatusBadge status={doc.status} />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {priorities.length > 0 ? (
+        <section className="panel">
+          <div className="panelhead">
+            <div>
+              <h2>Prioritas pemeriksaan stok</h2>
+              <p>Kelas ABC dan estimasi cakupan per produk</p>
+            </div>
+            <Link className="outline" href="/products/abc-analysis">
+              Lihat analisis →
+            </Link>
+          </div>
+          <div className="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Produk</th>
+                  <th>Prioritas</th>
+                  <th>Stok</th>
+                  <th>Cakupan</th>
+                  <th>Risiko</th>
+                </tr>
+              </thead>
+              <tbody>
+                {priorities.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <Link href={`/stock-movements?product=${r.id}`}>
+                        {r.brand} {r.package_size}
+                      </Link>
+                    </td>
+                    <td>
+                      <GradeBadge grade={r.abc_class} />
+                    </td>
+                    <td>
+                      {qty(r.current_stock)} {r.uom}
+                    </td>
+                    <td>
+                      {r.estimated_stock_days != null
+                        ? `${Number(r.estimated_stock_days).toLocaleString("id-ID", {
+                            minimumFractionDigits: 1,
+                            maximumFractionDigits: 1,
+                          })} hari`
+                        : "—"}
+                    </td>
+                    <td>{r.is_stock_below_28_days ? "Berisiko" : "Aman"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       ) : null}
-    </div>
+    </>
   );
 }

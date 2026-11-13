@@ -15,8 +15,8 @@ export interface RoleInfo {
   token: string;
   label: string;
   description: string;
-  /** Kelas ikon warna kartu peran di halaman login. */
-  tone: string;
+  /** Keterangan singkat di kanan baris radio login. */
+  hint: string;
 }
 
 export const ROLES: RoleInfo[] = [
@@ -25,49 +25,49 @@ export const ROLES: RoleInfo[] = [
     token: "demo-direktur",
     label: "Direktur",
     description: "Akses penuh: seluruh modul, laporan, konfirmasi dokumen, dan manajemen periode akuntansi.",
-    tone: "border-amber-200 bg-amber-50 text-amber-900 hover:border-amber-400 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100",
+    hint: "Ringkasan usaha",
   },
   {
     value: "admin",
     token: "demo-admin",
     label: "Admin (Sales & Finance)",
     description: "Faktur penjualan, pembayaran kas/bank, dan pemantauan data operasional.",
-    tone: "border-blue-200 bg-blue-50 text-blue-900 hover:border-blue-400 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100",
+    hint: "Pengaturan akun",
   },
   {
     value: "sales",
     token: "demo-sales",
     label: "Sales",
     description: "Faktur penjualan dan data produk (nilai HPP disembunyikan oleh backend).",
-    tone: "border-emerald-200 bg-emerald-50 text-emerald-900 hover:border-emerald-400 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100",
+    hint: "Pesanan",
   },
   {
     value: "gudang",
     token: "demo-gudang",
     label: "Gudang",
     description: "Penerimaan barang, surat jalan, konfirmasi stok. Kolom harga disembunyikan oleh backend.",
-    tone: "border-orange-200 bg-orange-50 text-orange-900 hover:border-orange-400 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-100",
+    hint: "Persediaan",
   },
   {
     value: "kasir",
     token: "demo-kasir",
     label: "Kasir (Finance)",
     description: "Pembayaran masuk/keluar (BKM/BKK), piutang pelanggan, dan hutang supplier.",
-    tone: "border-violet-200 bg-violet-50 text-violet-900 hover:border-violet-400 dark:border-violet-900 dark:bg-violet-950 dark:text-violet-100",
+    hint: "Kas & bank",
   },
   {
     value: "accounting",
     token: "demo-accounting",
     label: "Accounting",
     description: "Buku besar jurnal, debit note, COA, periode akuntansi, payroll, dan data HR.",
-    tone: "border-cyan-200 bg-cyan-50 text-cyan-900 hover:border-cyan-400 dark:border-cyan-900 dark:bg-cyan-950 dark:text-cyan-100",
+    hint: "Pembukuan",
   },
   {
     value: "stakeholder",
     token: "demo-stakeholder",
     label: "Stakeholder",
     description: "Hanya-baca: ringkasan kinerja, laporan keuangan, dan data operasional.",
-    tone: "border-slate-300 bg-slate-50 text-slate-900 hover:border-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100",
+    hint: "Laporan",
   },
 ];
 

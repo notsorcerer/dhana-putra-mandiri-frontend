@@ -1,19 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { PageHeader } from "@/components/app/page-header";
@@ -21,7 +13,7 @@ import { StatusBadge } from "@/components/app/status-badge";
 import { ApiError, apiPost, fetchAllPages } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { dateId, rupiah, todayIso } from "@/lib/format";
-import { CAN, can } from "@/lib/menu";
+import { CAN, can, type Role } from "@/lib/menu";
 import { usePaginated } from "@/lib/use-api";
 import type { Employee, EmployeeMutation } from "@/types/api";
 import { DEPARTMENT_OPTIONS } from "../employees/employee-form";
@@ -32,6 +24,13 @@ const MUTATION_TYPE_OPTIONS = [
   { value: "DEPARTMENT_TRANSFER", label: "Mutasi Departemen" },
   { value: "SALARY_ADJUSTMENT", label: "Penyesuaian Gaji" },
   { value: "STATUS_CHANGE", label: "Perubahan Status" },
+];
+
+const HR_TABS: { href: string; label: string; roles: readonly Role[] }[] = [
+  { href: "/hr/payroll", label: "Payroll & fee", roles: CAN.viewPayroll },
+  { href: "/hr/employees", label: "Data pegawai", roles: CAN.viewEmployees },
+  { href: "/hr/mutations", label: "Mutasi karyawan", roles: CAN.viewHrOps },
+  { href: "/hr/labor-records", label: "Catatan kerja", roles: CAN.viewLaborRecords },
 ];
 
 export default function EmployeeMutationsPage() {
@@ -66,6 +65,7 @@ export default function EmployeeMutationsPage() {
   }, [open]);
 
   const employeeMap = useMemo(() => new Map(employees.map((e) => [String(e.id), e])), [employees]);
+  const visibleTabs = HR_TABS.filter((tab) => can(tab.roles, session?.role));
 
   const pickEmployee = (employeeId: string) => {
     const employee = employeeMap.get(employeeId);
@@ -115,7 +115,7 @@ export default function EmployeeMutationsPage() {
     {
       key: "employee_name",
       header: "Karyawan",
-      render: (row) => <span className="font-medium">{row.employee_name}</span>,
+      render: (row) => <strong>{row.employee_name}</strong>,
     },
     {
       key: "mutation_date",
@@ -131,7 +131,7 @@ export default function EmployeeMutationsPage() {
       key: "position",
       header: "Jabatan",
       render: (row) => (
-        <span className="text-sm">
+        <span>
           {row.previous_position || "-"} <span className="text-muted-foreground">→</span>{" "}
           {row.new_position || "-"}
         </span>
@@ -141,7 +141,7 @@ export default function EmployeeMutationsPage() {
       key: "department",
       header: "Departemen",
       render: (row) => (
-        <span className="text-sm">
+        <span>
           <StatusBadge status={row.previous_department} /> <span className="text-muted-foreground">→</span>{" "}
           <StatusBadge status={row.new_department} />
         </span>
@@ -152,7 +152,7 @@ export default function EmployeeMutationsPage() {
       header: "Gaji",
       className: "text-right",
       render: (row) => (
-        <span className="text-sm tabular-nums">
+        <span className="tabular-nums">
           {rupiah(row.previous_salary)} <span className="text-muted-foreground">→</span>{" "}
           {rupiah(row.new_salary)}
         </span>
@@ -161,31 +161,194 @@ export default function EmployeeMutationsPage() {
     {
       key: "reason",
       header: "Alasan / SK",
-      render: (row) => (
-        <span className="block max-w-64 truncate text-sm text-muted-foreground" title={row.reason}>
-          {row.reason || "-"}
-        </span>
-      ),
+      render: (row) => row.reason || "-",
     },
     {
       key: "approved_by_name",
       header: "Disetujui",
-      render: (row) => <span className="text-sm">{row.approved_by_name || "-"}</span>,
+      render: (row) => row.approved_by_name || "-",
     },
   ];
 
   return (
     <div>
       <PageHeader
-        title="Mutasi Karyawan"
+        eyebrow="SUMBER DAYA MANUSIA"
+        title="Mutasi karyawan"
         description="Riwayat promosi, demosi, perpindahan departemen, dan penyesuaian gaji karyawan."
       >
         {canManage ? (
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus /> Catat Mutasi
+          <Button type="button" onClick={() => setOpen((v) => !v)}>
+            {open ? "Tutup Form" : "+ Catat Mutasi"}
           </Button>
         ) : null}
       </PageHeader>
+
+      <nav className="tabs" aria-label="Tampilan halaman">
+        {visibleTabs.map((tab) => (
+          <Link
+            key={tab.href}
+            href={tab.href}
+            aria-current={tab.href === "/hr/mutations" ? "page" : undefined}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </nav>
+
+      {open && canManage ? (
+        <form onSubmit={handleSubmit} className="panel formgrid mb-4">
+          <div className="panelhead wide">
+            <div>
+              <h2>Catat mutasi karyawan</h2>
+              <p>
+                Data jabatan, departemen, dan gaji sebelumnya terisi otomatis dari master karyawan dan dapat
+                disesuaikan.
+              </p>
+            </div>
+          </div>
+
+          <label className="wide" htmlFor="mut-employee">
+            Karyawan *
+            <select
+              id="mut-employee"
+              required
+              value={form.employee}
+              onChange={(e) => pickEmployee(e.target.value)}
+            >
+              <option value="">— pilih karyawan —</option>
+              {employees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.employee_id} · {employee.full_name} ({employee.department_display})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="mut-date">
+            Tanggal mutasi *
+            <Input
+              id="mut-date"
+              type="date"
+              required
+              value={form.mutation_date}
+              onChange={(e) => setForm((p) => ({ ...p, mutation_date: e.target.value }))}
+            />
+          </label>
+
+          <label htmlFor="mut-type">
+            Jenis mutasi *
+            <select
+              id="mut-type"
+              required
+              value={form.mutation_type}
+              onChange={(e) => setForm((p) => ({ ...p, mutation_type: e.target.value }))}
+            >
+              {MUTATION_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="mut-prev-dept">
+            Departemen lama
+            <select
+              id="mut-prev-dept"
+              value={form.previous_department}
+              onChange={(e) => setForm((p) => ({ ...p, previous_department: e.target.value }))}
+            >
+              <option value="">—</option>
+              {DEPARTMENT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="mut-new-dept">
+            Departemen baru
+            <select
+              id="mut-new-dept"
+              value={form.new_department}
+              onChange={(e) => setForm((p) => ({ ...p, new_department: e.target.value }))}
+            >
+              <option value="">—</option>
+              {DEPARTMENT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="mut-prev-pos">
+            Jabatan lama
+            <Input
+              id="mut-prev-pos"
+              value={form.previous_position}
+              onChange={(e) => setForm((p) => ({ ...p, previous_position: e.target.value }))}
+            />
+          </label>
+
+          <label htmlFor="mut-new-pos">
+            Jabatan baru
+            <Input
+              id="mut-new-pos"
+              value={form.new_position}
+              onChange={(e) => setForm((p) => ({ ...p, new_position: e.target.value }))}
+            />
+          </label>
+
+          <label htmlFor="mut-prev-salary">
+            Gaji lama
+            <Input
+              id="mut-prev-salary"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.previous_salary}
+              onChange={(e) => setForm((p) => ({ ...p, previous_salary: e.target.value }))}
+            />
+          </label>
+
+          <label htmlFor="mut-new-salary">
+            Gaji baru
+            <Input
+              id="mut-new-salary"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.new_salary}
+              onChange={(e) => setForm((p) => ({ ...p, new_salary: e.target.value }))}
+            />
+          </label>
+
+          <label className="wide" htmlFor="mut-reason">
+            Alasan / nomor SK *
+            <Textarea
+              id="mut-reason"
+              rows={3}
+              required
+              value={form.reason}
+              onChange={(e) => setForm((p) => ({ ...p, reason: e.target.value }))}
+              placeholder="Alasan mutasi atau nomor surat keputusan…"
+            />
+          </label>
+
+          <div className="form-actions wide">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={saving || form.employee === ""}>
+              {saving ? <Loader2 className="animate-spin" /> : null}
+              Simpan Mutasi
+            </Button>
+          </div>
+        </form>
+      ) : null}
 
       <DataTable
         columns={columns}
@@ -201,158 +364,6 @@ export default function EmployeeMutationsPage() {
         total={data?.count}
         onPageChange={setPage}
       />
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Catat Mutasi Karyawan</DialogTitle>
-            <DialogDescription>
-              Data jabatan, departemen, dan gaji sebelumnya terisi otomatis dari master karyawan dan dapat
-              disesuaikan.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="mut-employee">Karyawan *</Label>
-                <select
-                  id="mut-employee"
-                  required
-                  value={form.employee}
-                  onChange={(e) => pickEmployee(e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  <option value="">— pilih karyawan —</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.employee_id} · {employee.full_name} ({employee.department_display})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mut-date">Tanggal Mutasi *</Label>
-                <Input
-                  id="mut-date"
-                  type="date"
-                  required
-                  value={form.mutation_date}
-                  onChange={(e) => setForm((p) => ({ ...p, mutation_date: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mut-type">Jenis Mutasi *</Label>
-                <select
-                  id="mut-type"
-                  required
-                  value={form.mutation_type}
-                  onChange={(e) => setForm((p) => ({ ...p, mutation_type: e.target.value }))}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  {MUTATION_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mut-prev-dept">Departemen Lama</Label>
-                <select
-                  id="mut-prev-dept"
-                  value={form.previous_department}
-                  onChange={(e) => setForm((p) => ({ ...p, previous_department: e.target.value }))}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  <option value="">—</option>
-                  {DEPARTMENT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mut-new-dept">Departemen Baru</Label>
-                <select
-                  id="mut-new-dept"
-                  value={form.new_department}
-                  onChange={(e) => setForm((p) => ({ ...p, new_department: e.target.value }))}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  <option value="">—</option>
-                  {DEPARTMENT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mut-prev-pos">Jabatan Lama</Label>
-                <Input
-                  id="mut-prev-pos"
-                  value={form.previous_position}
-                  onChange={(e) => setForm((p) => ({ ...p, previous_position: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mut-new-pos">Jabatan Baru</Label>
-                <Input
-                  id="mut-new-pos"
-                  value={form.new_position}
-                  onChange={(e) => setForm((p) => ({ ...p, new_position: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mut-prev-salary">Gaji Lama</Label>
-                <Input
-                  id="mut-prev-salary"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.previous_salary}
-                  onChange={(e) => setForm((p) => ({ ...p, previous_salary: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mut-new-salary">Gaji Baru</Label>
-                <Input
-                  id="mut-new-salary"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.new_salary}
-                  onChange={(e) => setForm((p) => ({ ...p, new_salary: e.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="mut-reason">Alasan / Nomor SK *</Label>
-              <Textarea
-                id="mut-reason"
-                rows={3}
-                required
-                value={form.reason}
-                onChange={(e) => setForm((p) => ({ ...p, reason: e.target.value }))}
-                placeholder="Alasan mutasi atau nomor surat keputusan…"
-              />
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>
-                Batal
-              </Button>
-              <Button type="submit" disabled={saving || form.employee === ""}>
-                {saving ? <Loader2 className="animate-spin" /> : null}
-                Simpan Mutasi
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

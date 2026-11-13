@@ -1,10 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { TrendingUp } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { KpiCard } from "@/components/app/kpi-card";
+import { SvgIcon } from "@/components/app/svg-sprites";
 import { availableYears, num, pct, qty, rupiah } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import type { AnnualReport } from "@/types/api";
@@ -17,184 +14,217 @@ export default function AnnualReportPage() {
   const summary = data?.summary;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <TrendingUp className="size-5 text-primary" />
-            Ringkasan Keuangan Tahunan
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Pendapatan, laba kotor, beban operasional, dan laba bersih operasional.
-          </p>
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="annual-year" className="text-xs font-medium text-muted-foreground">
-            Tahun
-          </label>
-          <select
-            id="annual-year"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="h-9 w-32 rounded-md border border-input bg-transparent px-3 text-sm"
-          >
+    <div className="space-y-4">
+      <form className="table-tools" onSubmit={(e) => e.preventDefault()}>
+        <label htmlFor="annual-year">
+          Tahun laporan
+          <select id="annual-year" value={year} onChange={(e) => setYear(e.target.value)}>
             {years.map((y) => (
               <option key={y} value={y}>
                 {y}
               </option>
             ))}
           </select>
-        </div>
-      </div>
+        </label>
+      </form>
 
       {loading ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">Menyusun ringkasan tahunan…</p>
+        <section className="panel">
+          <div className="empty-state">
+            <SvgIcon name="doc" />
+            <p>Menyusun ringkasan tahunan…</p>
+          </div>
+        </section>
       ) : error ? (
-        <p className="py-10 text-center text-sm text-destructive">{error}</p>
+        <section className="panel">
+          <div className="empty-state">
+            <SvgIcon name="alert" />
+            <p className="text-destructive">{error}</p>
+          </div>
+        </section>
       ) : data && summary ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard title="Total Pendapatan" value={rupiah(summary.total_revenue)} />
-            <KpiCard title="Laba Kotor" value={rupiah(summary.gross_profit)} tone="positive" />
-            <KpiCard title="Beban Operasional" value={rupiah(summary.operating_expenses.total)} tone="warning" />
-            <KpiCard
-              title="Laba Bersih Operasional"
-              value={rupiah(summary.net_operating_profit)}
-              tone={num(summary.net_operating_profit) >= 0 ? "positive" : "negative"}
-              hint={`Margin bersih ${pct(summary.net_profit_margin_pct)}`}
-            />
-          </div>
+          <section className="metric-grid" aria-label="Ringkasan keuangan tahunan">
+            <article className="metric">
+              <div>
+                <span>Total Pendapatan</span>
+                <SvgIcon name="sales" />
+              </div>
+              <strong>{rupiah(summary.total_revenue)}</strong>
+              <small>Omzet tahun {data.year}</small>
+            </article>
+            <article className="metric">
+              <div>
+                <span>Laba Kotor</span>
+                <SvgIcon name="trend" />
+              </div>
+              <strong>{rupiah(summary.gross_profit)}</strong>
+              <small className="up">Setelah HPP {rupiah(summary.total_cogs)}</small>
+            </article>
+            <article className="metric">
+              <div>
+                <span>Beban Operasional</span>
+                <SvgIcon name="wallet" />
+              </div>
+              <strong>{rupiah(summary.operating_expenses.total)}</strong>
+              <small>Gaji, kuli bongkar, armada & umum</small>
+            </article>
+            <article className="metric">
+              <div>
+                <span>Laba Bersih Operasional</span>
+                <SvgIcon name="report" />
+              </div>
+              <strong>{rupiah(summary.net_operating_profit)}</strong>
+              <small className={num(summary.net_operating_profit) >= 0 ? "up" : "down"}>
+                Margin bersih {pct(summary.net_profit_margin_pct)}
+              </small>
+            </article>
+          </section>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Laporan Laba Rugi Ringkas {data.year}</CardTitle>
-                <CardDescription>Struktur laba rugi satu tahun penuh</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell>Pendapatan Penjualan</TableCell>
-                      <TableCell className="text-right tabular-nums">{rupiah(summary.total_revenue)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>Harga Pokok Penjualan (HPP)</TableCell>
-                      <TableCell className="text-right tabular-nums">({rupiah(summary.total_cogs)})</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-semibold">Laba Kotor</TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums">
-                        {rupiah(summary.gross_profit)}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="pl-6 text-muted-foreground">Beban Bongkar Muat (Kuli)</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        ({rupiah(summary.operating_expenses.kuli_bongkar_expense)})
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="pl-6 text-muted-foreground">Beban Gaji & Upah</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        ({rupiah(summary.operating_expenses.payroll_expense)})
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="pl-6 text-muted-foreground">Beban Transportasi Armada</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        ({rupiah(summary.operating_expenses.armada_transport_expense)})
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="pl-6 text-muted-foreground">Beban Kantor & Umum</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        ({rupiah(summary.operating_expenses.office_general_expense)})
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-semibold">Total Beban Operasional</TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums">
-                        ({rupiah(summary.operating_expenses.total)})
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-semibold">Laba Bersih Operasional</TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums">
-                        {rupiah(summary.net_operating_profit)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <section className="panel scroll">
+              <div className="panelhead">
+                <div>
+                  <h2>Laporan laba rugi ringkas {data.year}</h2>
+                  <p>Struktur laba rugi operasional satu tahun penuh.</p>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Komponen</th>
+                    <th className="text-right">Nilai</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Pendapatan Penjualan</td>
+                    <td className="text-right tabular-nums">{rupiah(summary.total_revenue)}</td>
+                  </tr>
+                  <tr>
+                    <td>Harga Pokok Penjualan (HPP)</td>
+                    <td className="text-right tabular-nums">({rupiah(summary.total_cogs)})</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Laba Kotor</strong>
+                    </td>
+                    <td className="text-right tabular-nums">
+                      <strong>{rupiah(summary.gross_profit)}</strong>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pl-6 text-muted-foreground">Beban Bongkar Muat (Kuli)</td>
+                    <td className="text-right tabular-nums">
+                      ({rupiah(summary.operating_expenses.kuli_bongkar_expense)})
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pl-6 text-muted-foreground">Beban Gaji & Upah</td>
+                    <td className="text-right tabular-nums">
+                      ({rupiah(summary.operating_expenses.payroll_expense)})
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pl-6 text-muted-foreground">Beban Transportasi Armada</td>
+                    <td className="text-right tabular-nums">
+                      ({rupiah(summary.operating_expenses.armada_transport_expense)})
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pl-6 text-muted-foreground">Beban Kantor & Umum</td>
+                    <td className="text-right tabular-nums">
+                      ({rupiah(summary.operating_expenses.office_general_expense)})
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Total Beban Operasional</strong>
+                    </td>
+                    <td className="text-right tabular-nums">
+                      <strong>({rupiah(summary.operating_expenses.total)})</strong>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Laba Bersih Operasional</strong>
+                    </td>
+                    <td className="text-right tabular-nums">
+                      <strong>{rupiah(summary.net_operating_profit)}</strong>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Rincian Bulanan {data.year}</CardTitle>
-                <CardDescription>Penjualan dan laba kotor per bulan</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Bulan</TableHead>
-                      <TableHead className="text-right">Penjualan</TableHead>
-                      <TableHead className="text-right">Volume</TableHead>
-                      <TableHead className="text-right">Laba Kotor</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.monthly_breakdown.map((t) => (
-                      <TableRow key={t.month}>
-                        <TableCell className="font-medium">{t.month_name}</TableCell>
-                        <TableCell className="text-right tabular-nums">{rupiah(t.total_sales)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{qty(t.total_volume)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{rupiah(t.gross_profit)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <section className="panel scroll">
+              <div className="panelhead">
+                <div>
+                  <h2>Rincian bulanan {data.year}</h2>
+                  <p>Penjualan, volume, dan laba kotor per bulan.</p>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Bulan</th>
+                    <th className="text-right">Penjualan</th>
+                    <th className="text-right">Volume</th>
+                    <th className="text-right">Laba Kotor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.monthly_breakdown.map((t) => (
+                    <tr key={t.month}>
+                      <td>
+                        <strong>{t.month_name}</strong>
+                      </td>
+                      <td className="text-right tabular-nums">{rupiah(t.total_sales)}</td>
+                      <td className="text-right tabular-nums">{qty(t.total_volume)}</td>
+                      <td className="text-right tabular-nums">{rupiah(t.gross_profit)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
           </div>
 
           {data.top_products && data.top_products.length > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>5 Produk Teratas {data.year}</CardTitle>
-                <CardDescription>Berdasarkan pendapatan</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Produk</TableHead>
-                      <TableHead className="text-right">Terjual</TableHead>
-                      <TableHead className="text-right">Pendapatan</TableHead>
-                      <TableHead className="text-right">Laba Kotor</TableHead>
-                      <TableHead className="text-right">Margin</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.top_products.map((row) => (
-                      <TableRow key={row.sku}>
-                        <TableCell>
-                          <p className="font-medium">{row.name}</p>
-                          <p className="text-xs text-muted-foreground">{row.sku}</p>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {qty(row.qty_sold)} {row.uom}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{rupiah(row.revenue)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{rupiah(row.gross_profit)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{pct(row.margin_percentage)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <section className="panel scroll">
+              <div className="panelhead">
+                <div>
+                  <h2>5 produk teratas {data.year}</h2>
+                  <p>Diurutkan berdasarkan kontribusi pendapatan.</p>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Produk</th>
+                    <th className="text-right">Terjual</th>
+                    <th className="text-right">Pendapatan</th>
+                    <th className="text-right">Laba Kotor</th>
+                    <th className="text-right">Margin</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.top_products.map((row) => (
+                    <tr key={row.sku}>
+                      <td>
+                        <strong>{row.name}</strong>
+                        <div className="text-xs text-muted-foreground">{row.sku}</div>
+                      </td>
+                      <td className="text-right tabular-nums">
+                        {qty(row.qty_sold)} {row.uom}
+                      </td>
+                      <td className="text-right tabular-nums">{rupiah(row.revenue)}</td>
+                      <td className="text-right tabular-nums">{rupiah(row.gross_profit)}</td>
+                      <td className="text-right tabular-nums">{pct(row.margin_percentage)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
           ) : null}
         </>
       ) : null}

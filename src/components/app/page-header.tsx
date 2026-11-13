@@ -1,18 +1,21 @@
 interface PageHeaderProps {
   title: string;
   description?: string;
+  /** Label kecil di atas judul, mis. "DOKUMEN PENJUALAN". */
+  eyebrow?: string;
   children?: React.ReactNode;
 }
 
-/** Judul halaman dengan deskripsi dan slot aksi (tombol) di kanan. */
-export function PageHeader({ title, description, children }: PageHeaderProps) {
+/** Judul halaman gaya prototipe: H1 besar, deskripsi 13px, aksi di kanan. */
+export function PageHeader({ title, description, eyebrow, children }: PageHeaderProps) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="space-y-1">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">{title}</h1>
-        {description ? <p className="max-w-2xl text-sm text-muted-foreground">{description}</p> : null}
+    <div className="pagehead">
+      <div>
+        {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
+        <h1>{title}</h1>
+        {description ? <p>{description}</p> : null}
       </div>
-      {children ? <div className="flex flex-wrap items-center gap-2">{children}</div> : null}
+      {children ? <div className="inline-actions">{children}</div> : null}
     </div>
   );
 }

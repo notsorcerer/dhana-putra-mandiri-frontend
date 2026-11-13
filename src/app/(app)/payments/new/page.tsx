@@ -1,16 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Save } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { PageHeader } from "@/components/app/page-header";
 import { ApiError, apiPost, fetchAllPages } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { num, rupiah, suggestDocNumber, todayIso } from "@/lib/format";
@@ -39,6 +31,10 @@ const PAYMENT_TYPE_OPTIONS = [
   { value: "giro", label: "Giro / Cek" },
 ];
 
+/**
+ * Halaman Catat Mutasi Dana:
+ * paritas penuh dengan templates/form.html (<form class="panel formgrid">).
+ */
 export default function NewPaymentPage() {
   const router = useRouter();
   const { session } = useAuth();
@@ -68,14 +64,39 @@ export default function NewPaymentPage() {
 
   useEffect(() => {
     fetchAllPages<ChartOfAccounts>("/finance/chart-of-accounts/")
-      .then((rows) => setCoa(rows.filter((acc) => acc.account_type === "ASSET" && acc.code.startsWith("11") && acc.code !== "1130" && acc.code !== "1140")))
+      .then((rows) =>
+        setCoa(
+          rows.filter(
+            (acc) =>
+              acc.account_type === "ASSET" &&
+              acc.code.startsWith("11") &&
+              acc.code !== "1130" &&
+              acc.code !== "1140",
+          ),
+        ),
+      )
       .catch(() => toast.error("Gagal memuat daftar akun kas/bank."));
-    fetchAllPages<Customer>("/finance/customers/").then(setCustomers).catch(() => undefined);
-    fetchAllPages<Supplier>("/finance/suppliers/").then(setSuppliers).catch(() => undefined);
-    fetchAllPages<SalesInvoice>("/finance/sales-invoices/")
-      .then((rows) => setInvoices(rows.filter((inv) => inv.status !== "paid" && inv.status !== "cancelled" && num(inv.total_amount) > 0)))
+    fetchAllPages<Customer>("/finance/customers/")
+      .then(setCustomers)
       .catch(() => undefined);
-    fetchAllPages<GoodsReceipt>("/inventory/goods-receipts/").then(setReceipts).catch(() => undefined);
+    fetchAllPages<Supplier>("/finance/suppliers/")
+      .then(setSuppliers)
+      .catch(() => undefined);
+    fetchAllPages<SalesInvoice>("/finance/sales-invoices/")
+      .then((rows) =>
+        setInvoices(
+          rows.filter(
+            (inv) =>
+              inv.status !== "paid" &&
+              inv.status !== "cancelled" &&
+              num(inv.total_amount) > 0,
+          ),
+        ),
+      )
+      .catch(() => undefined);
+    fetchAllPages<GoodsReceipt>("/inventory/goods-receipts/")
+      .then(setReceipts)
+      .catch(() => undefined);
   }, []);
 
   const set = <K extends keyof typeof form>(key: K, value: string) => {
@@ -119,7 +140,7 @@ export default function NewPaymentPage() {
       }
 
       const data = await apiPost<Payment>("/finance/payments/", payload);
-      toast.success(`Pembayaran ${data.payment_number} berhasil dicatat (${rupiah(data.amount)}).`);
+      toast.success(`Mutasi ${data.payment_number} telah dibukukan.`);
       router.push("/payments");
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Gagal menyimpan pembayaran.";
@@ -132,12 +153,10 @@ export default function NewPaymentPage() {
   if (!canCreate) {
     return (
       <div>
-        <PageHeader title="Buat Pembayaran" />
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Peran Anda hanya dapat melihat pembayaran (bukan membuat).
-          </CardContent>
-        </Card>
+        <h1>Catat mutasi dana</h1>
+        <p className="empty-state panel">
+          Peran Anda hanya dapat melihat mutasi kas & bank.
+        </p>
       </div>
     );
   }
@@ -147,216 +166,180 @@ export default function NewPaymentPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Buat Pembayaran"
-        description="Bukti kas masuk (BKM) untuk penerimaan piutang, atau bukti kas keluar (BKK) untuk pengeluaran."
-      >
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/payments">
-            <ArrowLeft /> Kembali
-          </Link>
-        </Button>
-      </PageHeader>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Informasi Pembayaran</CardTitle>
-            <CardDescription>
-              Nomor dokumen otomatis mengikuti kategori (BKM/BKK) dan dapat diubah. Akun kas/bank hanya
-              menampilkan akun kas dan rekening bank.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="category">Kategori *</Label>
-              <select
-                id="category"
-                required
-                value={form.category}
-                onChange={(e) => changeCategory(e.target.value as PaymentCategory)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              >
-                {CATEGORY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="payment_number">Nomor Dokumen *</Label>
-              <Input id="payment_number" required value={form.payment_number} onChange={(e) => set("payment_number", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="payment_type">Metode Pembayaran *</Label>
-              <select
-                id="payment_type"
-                required
-                value={form.payment_type}
-                onChange={(e) => set("payment_type", e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              >
-                {PAYMENT_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cash_bank_account">Akun Kas / Bank *</Label>
-              <select
-                id="cash_bank_account"
-                required
-                value={form.cash_bank_account}
-                onChange={(e) => set("cash_bank_account", e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              >
-                <option value="">— pilih akun —</option>
-                {coa.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.code} · {acc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="amount">Jumlah *</Label>
-              <Input
-                id="amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                required
-                value={form.amount}
-                onChange={(e) => set("amount", e.target.value)}
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="payment_date">Tanggal Pembayaran *</Label>
-              <Input id="payment_date" type="date" required value={form.payment_date} onChange={(e) => set("payment_date", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="reference_number">Nomor Referensi</Label>
-              <Input id="reference_number" value={form.reference_number} onChange={(e) => set("reference_number", e.target.value)} placeholder="No. cek / transfer / kwitansi" />
-            </div>
-          </CardContent>
-        </Card>
+      <h1>Catat mutasi dana</h1>
+      <form className="panel formgrid" onSubmit={handleSubmit}>
+        <label>
+          Tanggal mutasi
+          <input
+            type="date"
+            required
+            value={form.payment_date}
+            onChange={(e) => set("payment_date", e.target.value)}
+          />
+        </label>
+        <label>
+          Jenis mutasi
+          <select
+            required
+            value={form.category}
+            onChange={(e) => changeCategory(e.target.value as PaymentCategory)}
+          >
+            {CATEGORY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Akun kas / bank
+          <select
+            required
+            value={form.cash_bank_account}
+            onChange={(e) => set("cash_bank_account", e.target.value)}
+          >
+            <option value="">Pilih akun</option>
+            {coa.map((acc) => (
+              <option key={acc.id} value={acc.id}>
+                {acc.code} · {acc.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Metode pembayaran
+          <select
+            required
+            value={form.payment_type}
+            onChange={(e) => set("payment_type", e.target.value)}
+          >
+            {PAYMENT_TYPE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Jumlah (Rp)
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            required
+            value={form.amount}
+            onChange={(e) => set("amount", e.target.value)}
+            placeholder="0"
+          />
+        </label>
+        <label>
+          Nomor bukti unik
+          <input
+            required
+            value={form.payment_number}
+            onChange={(e) => set("payment_number", e.target.value)}
+          />
+        </label>
 
         {isCustomerReceipt ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Penerimaan dari Pelanggan</CardTitle>
-              <CardDescription>
-                Pilih pelanggan dari master data, lalu tautkan faktur agar pembayaran tercatat pada piutang.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="customer">Pelanggan *</Label>
-                <select
-                  id="customer"
-                  required
-                  value={form.customer}
-                  onChange={(e) => set("customer", e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  <option value="">— pilih pelanggan —</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code} · {c.name}
+          <>
+            <label>
+              Pelanggan
+              <select
+                required
+                value={form.customer}
+                onChange={(e) => set("customer", e.target.value)}
+              >
+                <option value="">Pilih pelanggan</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code} · {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Dokumen asal (faktur)
+              <select
+                value={form.sales_invoice}
+                onChange={(e) => set("sales_invoice", e.target.value)}
+              >
+                <option value="">Tanpa referensi faktur</option>
+                {invoices
+                  .filter(
+                    (inv) =>
+                      form.customer === "" ||
+                      String(inv.customer ?? "") === form.customer,
+                  )
+                  .map((inv) => (
+                    <option key={inv.id} value={inv.id}>
+                      {inv.invoice_number} · {inv.customer_name || "Internal"} ·{" "}
+                      {rupiah(inv.total_amount)}
                     </option>
                   ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="sales_invoice">Faktur Terkait</Label>
-                <select
-                  id="sales_invoice"
-                  value={form.sales_invoice}
-                  onChange={(e) => set("sales_invoice", e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  <option value="">— tanpa faktur —</option>
-                  {invoices
-                    .filter((inv) => form.customer === "" || String(inv.customer ?? "") === form.customer)
-                    .map((inv) => (
-                      <option key={inv.id} value={inv.id}>
-                        {inv.invoice_number} · {inv.customer_name || "-"} · {rupiah(inv.total_amount)}
-                      </option>
-                    ))}
-                </select>
-              </div>
-            </CardContent>
-          </Card>
+              </select>
+            </label>
+          </>
         ) : null}
 
         {isSupplierPayment ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Pembayaran ke Pemasok</CardTitle>
-              <CardDescription>
-                Pilih pemasok dari master data; tautkan penerimaan barang bila melunasi hutang pembelian
-                tertentu.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="supplier">Pemasok *</Label>
-                <select
-                  id="supplier"
-                  required
-                  value={form.supplier}
-                  onChange={(e) => set("supplier", e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  <option value="">— pilih pemasok —</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.code} · {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="goods_receipt">Penerimaan Barang Terkait</Label>
-                <select
-                  id="goods_receipt"
-                  value={form.goods_receipt}
-                  onChange={(e) => set("goods_receipt", e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  <option value="">— tanpa penerimaan —</option>
-                  {receipts.map((gr) => (
-                    <option key={gr.id} value={gr.id}>
-                      {gr.receipt_number} · {gr.supplier_name || "-"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </CardContent>
-          </Card>
+          <>
+            <label>
+              Pemasok
+              <select
+                required
+                value={form.supplier}
+                onChange={(e) => set("supplier", e.target.value)}
+              >
+                <option value="">Pilih pemasok</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} · {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Dokumen asal (penerimaan)
+              <select
+                value={form.goods_receipt}
+                onChange={(e) => set("goods_receipt", e.target.value)}
+              >
+                <option value="">Tanpa referensi penerimaan</option>
+                {receipts.map((gr) => (
+                  <option key={gr.id} value={gr.id}>
+                    {gr.receipt_number} · {gr.supplier_name || "Internal"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
         ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Catatan</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1.5">
-              <Label htmlFor="notes">Keterangan</Label>
-              <Textarea id="notes" rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Keterangan tambahan pembayaran…" />
-            </div>
-          </CardContent>
-        </Card>
+        <label className="wide">
+          Nomor referensi bank / kwitansi
+          <input
+            value={form.reference_number}
+            onChange={(e) => set("reference_number", e.target.value)}
+            placeholder="Opsional"
+          />
+        </label>
 
-        <div className="flex items-center justify-end">
-          <Button type="submit" disabled={saving || form.cash_bank_account === "" || form.amount === ""}>
-            {saving ? <Loader2 className="animate-spin" /> : <Save />}
-            Simpan Pembayaran
-          </Button>
+        <label className="wide">
+          Catatan / alasan
+          <textarea
+            value={form.notes}
+            onChange={(e) => set("notes", e.target.value)}
+          />
+        </label>
+
+        <div>
+          <button
+            type="submit"
+            disabled={saving || form.cash_bank_account === "" || form.amount === ""}
+          >
+            {saving ? "Menyimpan…" : "Simpan"}
+          </button>
         </div>
       </form>
     </div>

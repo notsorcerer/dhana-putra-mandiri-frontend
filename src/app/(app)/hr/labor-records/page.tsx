@@ -1,19 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { PageHeader } from "@/components/app/page-header";
@@ -21,7 +13,7 @@ import { StatusBadge } from "@/components/app/status-badge";
 import { ApiError, apiPost, fetchAllPages } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { dateId, todayIso } from "@/lib/format";
-import { CAN, can } from "@/lib/menu";
+import { CAN, can, type Role } from "@/lib/menu";
 import { usePaginated } from "@/lib/use-api";
 import type { Employee, LaborRecord } from "@/types/api";
 
@@ -32,6 +24,13 @@ const RECORD_TYPE_OPTIONS = [
   { value: "WARNING_LETTER", label: "Surat Peringatan" },
   { value: "COMMENDATION", label: "Apresiasi / Prestasi" },
   { value: "GENERAL", label: "Catatan Umum" },
+];
+
+const HR_TABS: { href: string; label: string; roles: readonly Role[] }[] = [
+  { href: "/hr/payroll", label: "Payroll & fee", roles: CAN.viewPayroll },
+  { href: "/hr/employees", label: "Data pegawai", roles: CAN.viewEmployees },
+  { href: "/hr/mutations", label: "Mutasi karyawan", roles: CAN.viewHrOps },
+  { href: "/hr/labor-records", label: "Catatan kerja", roles: CAN.viewLaborRecords },
 ];
 
 export default function LaborRecordsPage() {
@@ -60,6 +59,8 @@ export default function LaborRecordsPage() {
         .catch(() => toast.error("Gagal memuat daftar karyawan."));
     }
   }, [open]);
+
+  const visibleTabs = HR_TABS.filter((tab) => can(tab.roles, session?.role));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +98,7 @@ export default function LaborRecordsPage() {
     {
       key: "employee_name",
       header: "Karyawan",
-      render: (row) => <span className="font-medium">{row.employee_name}</span>,
+      render: (row) => <strong>{row.employee_name}</strong>,
     },
     {
       key: "record_type",
@@ -107,16 +108,12 @@ export default function LaborRecordsPage() {
     {
       key: "title",
       header: "Judul",
-      render: (row) => <span className="text-sm font-medium">{row.title}</span>,
+      render: (row) => <strong>{row.title}</strong>,
     },
     {
       key: "description",
       header: "Keterangan",
-      render: (row) => (
-        <span className="block max-w-72 truncate text-sm text-muted-foreground" title={row.description}>
-          {row.description || "-"}
-        </span>
-      ),
+      render: (row) => row.description || "-",
     },
     {
       key: "hours",
@@ -129,22 +126,136 @@ export default function LaborRecordsPage() {
     {
       key: "recorded_by_name",
       header: "Dicatat Oleh",
-      render: (row) => <span className="text-sm">{row.recorded_by_name || "-"}</span>,
+      render: (row) => row.recorded_by_name || "-",
     },
   ];
 
   return (
     <div>
       <PageHeader
-        title="Catatan Kerja"
+        eyebrow="SUMBER DAYA MANUSIA"
+        title="Catatan kerja & kehadiran"
         description="Kehadiran, lembur, insiden, surat peringatan, dan apresiasi karyawan. Catatan lembur menjadi acuan tunjangan lembur payroll."
       >
         {canManage ? (
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus /> Tambah Catatan
+          <Button type="button" onClick={() => setOpen((v) => !v)}>
+            {open ? "Tutup Form" : "+ Tambah Catatan"}
           </Button>
         ) : null}
       </PageHeader>
+
+      <nav className="tabs" aria-label="Tampilan halaman">
+        {visibleTabs.map((tab) => (
+          <Link
+            key={tab.href}
+            href={tab.href}
+            aria-current={tab.href === "/hr/labor-records" ? "page" : undefined}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </nav>
+
+      {open && canManage ? (
+        <form onSubmit={handleSubmit} className="panel formgrid mb-4">
+          <div className="panelhead wide">
+            <div>
+              <h2>Tambah catatan kerja</h2>
+              <p>Catatan lembur memakai jumlah jam; jenis lain dapat mengosongkan kolom jam.</p>
+            </div>
+          </div>
+
+          <label className="wide" htmlFor="lab-employee">
+            Karyawan *
+            <select
+              id="lab-employee"
+              required
+              value={form.employee}
+              onChange={(e) => setForm((p) => ({ ...p, employee: e.target.value }))}
+            >
+              <option value="">— pilih karyawan —</option>
+              {employees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.employee_id} · {employee.full_name} ({employee.department_display})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="lab-date">
+            Tanggal *
+            <Input
+              id="lab-date"
+              type="date"
+              required
+              value={form.record_date}
+              onChange={(e) => setForm((p) => ({ ...p, record_date: e.target.value }))}
+            />
+          </label>
+
+          <label htmlFor="lab-type">
+            Jenis catatan *
+            <select
+              id="lab-type"
+              required
+              value={form.record_type}
+              onChange={(e) => setForm((p) => ({ ...p, record_type: e.target.value }))}
+            >
+              {RECORD_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="lab-title">
+            Judul *
+            <Input
+              id="lab-title"
+              required
+              value={form.title}
+              onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+              placeholder="Lembur bongkar muat armada"
+            />
+          </label>
+
+          <label htmlFor="lab-hours">
+            Jam (lembur)
+            <Input
+              id="lab-hours"
+              type="number"
+              min="0"
+              step="0.25"
+              value={form.hours}
+              onChange={(e) => setForm((p) => ({ ...p, hours: e.target.value }))}
+              placeholder="0"
+            />
+          </label>
+
+          <label className="wide" htmlFor="lab-desc">
+            Keterangan *
+            <Textarea
+              id="lab-desc"
+              rows={3}
+              required
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              placeholder="Rincian kejadian / pekerjaan…"
+            />
+          </label>
+
+          <div className="form-actions wide">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={saving || form.employee === ""}>
+              {saving ? <Loader2 className="animate-spin" /> : null}
+              Simpan Catatan
+            </Button>
+          </div>
+        </form>
+      ) : null}
 
       <DataTable
         columns={columns}
@@ -160,109 +271,6 @@ export default function LaborRecordsPage() {
         total={data?.count}
         onPageChange={setPage}
       />
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Tambah Catatan Kerja</DialogTitle>
-            <DialogDescription>
-              Catatan lembur memakai jumlah jam; jenis lain dapat mengosongkan kolom jam.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="lab-employee">Karyawan *</Label>
-                <select
-                  id="lab-employee"
-                  required
-                  value={form.employee}
-                  onChange={(e) => setForm((p) => ({ ...p, employee: e.target.value }))}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  <option value="">— pilih karyawan —</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.employee_id} · {employee.full_name} ({employee.department_display})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="lab-date">Tanggal *</Label>
-                <Input
-                  id="lab-date"
-                  type="date"
-                  required
-                  value={form.record_date}
-                  onChange={(e) => setForm((p) => ({ ...p, record_date: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="lab-type">Jenis Catatan *</Label>
-                <select
-                  id="lab-type"
-                  required
-                  value={form.record_type}
-                  onChange={(e) => setForm((p) => ({ ...p, record_type: e.target.value }))}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  {RECORD_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="lab-title">Judul *</Label>
-                <Input
-                  id="lab-title"
-                  required
-                  value={form.title}
-                  onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-                  placeholder="Lembur bongkar muat armada"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="lab-hours">Jam (lembur)</Label>
-                <Input
-                  id="lab-hours"
-                  type="number"
-                  min="0"
-                  step="0.25"
-                  value={form.hours}
-                  onChange={(e) => setForm((p) => ({ ...p, hours: e.target.value }))}
-                  placeholder="0"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="lab-desc">Keterangan *</Label>
-              <Textarea
-                id="lab-desc"
-                rows={3}
-                required
-                value={form.description}
-                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                placeholder="Rincian kejadian / pekerjaan…"
-              />
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>
-                Batal
-              </Button>
-              <Button type="submit" disabled={saving || form.employee === ""}>
-                {saving ? <Loader2 className="animate-spin" /> : null}
-                Simpan Catatan
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

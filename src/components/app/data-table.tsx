@@ -1,11 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SvgIcon } from "@/components/app/svg-sprites";
 
 export interface Column<T> {
   key: string;
@@ -24,26 +20,39 @@ interface DataTableProps<T> {
   /** Aktifkan pencarian sisi-klien pada halaman aktif. */
   searchable?: boolean;
   searchPlaceholder?: string;
+  /** Slot filter tambahan di toolbar (mis. pilihan status). */
+  toolbar?: React.ReactNode;
   /** Navigasi halaman server-side (DRF ?page=N, 20 baris/halaman). */
   page?: number;
   totalPages?: number;
   total?: number;
   onPageChange?: (page: number) => void;
+  /** Jumlah baris per halaman, untuk label rentang. */
+  pageSize?: number;
 }
 
+/**
+ * Tabel data standar aplikasi, paritas penuh dengan templates/table.html:
+ * - form.table-tools (input#find-doc + select filter + button Terapkan)
+ * - div.scroll > table
+ * - td.empty-state (svg#doc + b "Belum ada data" + keterangan)
+ * - footer.pagination ("X–Y dari Z baris" + tombol .outline Sebelumnya / Berikutnya)
+ */
 export function DataTable<T>({
   columns,
   rows,
   getKey,
   loading = false,
   error = null,
-  emptyText = "Belum ada data.",
+  emptyText = "Periksa filter atau tanggal yang dipilih.",
   searchable = false,
-  searchPlaceholder = "Cari di halaman ini…",
+  searchPlaceholder = "Cari nomor dokumen atau mitra…",
+  toolbar,
   page,
   totalPages,
   total,
   onPageChange,
+  pageSize = 20,
 }: DataTableProps<T>) {
   const [query, setQuery] = useState("");
 
@@ -53,105 +62,134 @@ export function DataTable<T>({
     const needle = query.trim().toLowerCase();
     return rows.filter((row) =>
       columns.some((col) => {
-        const raw = col.render ? extractText(col.render(row)) : (row as Record<string, unknown>)[col.key];
+        const raw = col.render
+          ? extractText(col.render(row))
+          : (row as Record<string, unknown>)[col.key];
         return String(raw ?? "").toLowerCase().includes(needle);
       }),
     );
   }, [rows, query, columns]);
 
-  const showPagination = Boolean(onPageChange && totalPages && totalPages > 0);
+  const currentPage = page ?? 1;
+  const totalCount = query.trim() ? filtered.length : (total ?? filtered.length);
+  const rangeStart =
+    totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+  const rangeEnd =
+    totalCount > 0
+      ? Math.min((currentPage - 1) * pageSize + filtered.length, totalCount)
+      : 0;
+  const hasPrevious = Boolean(onPageChange && currentPage > 1);
+  const hasNext = Boolean(
+    onPageChange && totalPages && currentPage < totalPages,
+  );
 
   return (
-    <div className="space-y-3">
-      {searchable ? (
-        <div className="relative max-w-sm">
-          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={searchPlaceholder}
-            className="pl-8"
-          />
-        </div>
+    <section className="panel data-panel">
+      {searchable || toolbar ? (
+        <form
+          className="table-tools"
+          onSubmit={(e) => {
+            e.preventDefault();
+          }}
+        >
+          {searchable ? (
+            <>
+              <label className="sr-only" htmlFor="find-doc">
+                Cari dokumen atau mitra
+              </label>
+              <input
+                id="find-doc"
+                name="q"
+                placeholder={searchPlaceholder}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </>
+          ) : null}
+          {toolbar}
+          <button type="submit">Terapkan</button>
+        </form>
       ) : null}
 
-      <div className="overflow-hidden rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50 hover:bg-muted/50">
+      <div className="scroll">
+        <table>
+          <thead>
+            <tr>
               {columns.map((col) => (
-                <TableHead key={col.key} className={col.className}>
+                <th key={col.key} scope="col" className={col.className}>
                   {col.header}
-                </TableHead>
+                </th>
               ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+            </tr>
+          </thead>
+          <tbody>
             {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={`skeleton-${i}`}>
-                  {columns.map((col) => (
-                    <TableCell key={col.key}>
-                      <Skeleton className="h-4 w-full max-w-24" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              <tr>
+                <td colSpan={columns.length} className="empty-state">
+                  Memuat data…
+                </td>
+              </tr>
             ) : error ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="py-10 text-center text-sm text-destructive">
+              <tr>
+                <td colSpan={columns.length} className="errorlist">
                   {error}
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="py-10 text-center text-sm text-muted-foreground">
+              <tr>
+                <td colSpan={columns.length} className="empty-state">
+                  <SvgIcon name="doc" />
+                  <b>Belum ada data</b>
                   {emptyText}
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             ) : (
               filtered.map((row) => (
-                <TableRow key={getKey(row)}>
+                <tr key={getKey(row)}>
                   {columns.map((col) => (
-                    <TableCell key={col.key} className={col.className}>
-                      {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? "-")}
-                    </TableCell>
+                    <td key={col.key} className={col.className}>
+                      {col.render
+                        ? col.render(row)
+                        : String((row as Record<string, unknown>)[col.key] ?? "—")}
+                    </td>
                   ))}
-                </TableRow>
+                </tr>
               ))
             )}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
 
-      {showPagination ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-          <span>
-            {total !== undefined ? `${total} data total · ` : ""}Halaman {page} dari {totalPages}
-          </span>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon-sm"
-              disabled={(page ?? 1) <= 1 || loading}
-              onClick={() => onPageChange?.((page ?? 1) - 1)}
-              aria-label="Halaman sebelumnya"
+      <footer className="pagination">
+        <span>
+          {totalCount > 0
+            ? `${rangeStart}–${rangeEnd} dari ${totalCount} baris`
+            : "0 baris"}
+        </span>
+        <div>
+          {hasPrevious ? (
+            <button
+              type="button"
+              className="outline"
+              disabled={loading}
+              onClick={() => onPageChange?.(currentPage - 1)}
             >
-              <ChevronLeft />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              disabled={(page ?? 1) >= (totalPages ?? 1) || loading}
-              onClick={() => onPageChange?.((page ?? 1) + 1)}
-              aria-label="Halaman berikutnya"
+              ← Sebelumnya
+            </button>
+          ) : null}
+          {hasNext ? (
+            <button
+              type="button"
+              className="outline"
+              disabled={loading}
+              onClick={() => onPageChange?.(currentPage + 1)}
             >
-              <ChevronRight />
-            </Button>
-          </div>
+              Berikutnya →
+            </button>
+          ) : null}
         </div>
-      ) : null}
-    </div>
+      </footer>
+    </section>
   );
 }
 

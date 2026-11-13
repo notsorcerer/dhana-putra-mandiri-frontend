@@ -1,87 +1,73 @@
 "use client";
 
+import Link from "next/link";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { PageHeader } from "@/components/app/page-header";
-import { StatusBadge } from "@/components/app/status-badge";
-import { dateTimeId, qty, rupiah } from "@/lib/format";
+import { PeriodFilter } from "@/components/app/period-filter";
+import { dateTimeId, qty } from "@/lib/format";
 import { usePaginated } from "@/lib/use-api";
 import type { StockMovement } from "@/types/api";
 
 export default function StockMovementsPage() {
-  const { data, loading, error, page, setPage, totalPages } = usePaginated<StockMovement>("/inventory/stock-movements/");
+  const { data, loading, error, page, setPage, totalPages } =
+    usePaginated<StockMovement>("/inventory/stock-movements/");
 
   const columns: Column<StockMovement>[] = [
     {
+      key: "reference_number",
+      header: "Dokumen",
+      render: (row) => <span className="doc-number">{row.reference_number}</span>,
+    },
+    {
       key: "movement_date",
-      header: "Waktu",
-      render: (row) => <span className="text-sm whitespace-nowrap">{dateTimeId(row.movement_date)}</span>,
+      header: "Tanggal",
+      render: (row) => dateTimeId(row.movement_date),
     },
     {
-      key: "product",
+      key: "product_name",
       header: "Produk",
-      render: (row) => (
-        <div>
-          <p className="font-medium">{row.product_name}</p>
-          <p className="text-xs text-muted-foreground">{row.product_sku}</p>
-        </div>
-      ),
-    },
-    {
-      key: "movement_type",
-      header: "Jenis",
-      render: (row) => <StatusBadge status={row.movement_type} />,
+      render: (row) => `${row.product_sku} · ${row.product_name}`,
     },
     {
       key: "qty",
-      header: "Jumlah",
-      render: (row) => (
-        <span className="tabular-nums">
-          {row.movement_type === "IN" ? "+" : "−"}
-          {qty(row.qty)} <span className="text-xs text-muted-foreground">{row.product_uom}</span>
-        </span>
-      ),
+      header: "Gerakan",
+      render: (row) =>
+        `${row.movement_type === "IN" ? "+" : "−"}${qty(row.qty)}`,
     },
     {
       key: "stock_after",
-      header: "Stok",
-      render: (row) => (
-        <span className="tabular-nums text-muted-foreground">
-          {qty(row.stock_before)} → <span className="font-medium text-foreground">{qty(row.stock_after)}</span>
-        </span>
-      ),
+      header: "Saldo",
+      render: (row) => qty(row.stock_after),
     },
     {
-      key: "unit_cost",
-      header: "Biaya / unit",
-      render: (row) => <span className="tabular-nums">{rupiah(row.unit_cost)}</span>,
-    },
-    {
-      key: "reference",
-      header: "Referensi",
-      render: (row) => (
-        <div>
-          <p className="text-sm">{row.reference_number}</p>
-          <p className="text-xs text-muted-foreground">{row.reference_type_display}</p>
-        </div>
-      ),
+      key: "product_uom",
+      header: "Satuan",
+      render: (row) => row.product_uom,
     },
   ];
 
   return (
     <div>
-      <PageHeader
-        title="Pergerakan Stok"
-        description="Kartu stok (stock ledger) otomatis setiap penerimaan barang dan konfirmasi surat jalan."
-      />
+      <PageHeader title="Kartu stok">
+        <PeriodFilter />
+      </PageHeader>
+
+      <div className="tabs">
+        <Link href="/products">Persediaan</Link>
+        <Link href="/products/abc-analysis">Analisis ABC dan risiko</Link>
+        <Link href="/stock-movements" aria-current="page">
+          Kartu & pergerakan stok
+        </Link>
+      </div>
+
       <DataTable
         columns={columns}
         rows={data?.results}
         getKey={(row) => row.id}
         loading={loading}
         error={error}
-        emptyText="Belum ada pergerakan stok."
         searchable
-        searchPlaceholder="Cari produk / nomor referensi…"
+        searchPlaceholder="Cari dokumen atau produk…"
         page={page}
         totalPages={totalPages}
         total={data?.count}

@@ -2,220 +2,227 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Lock, LockOpen, Loader2, Send } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { DataTable, type Column } from "@/components/app/data-table";
-import { PageHeader } from "@/components/app/page-header";
-import { StatusBadge } from "@/components/app/status-badge";
+import { StatusBadge, statusLabel } from "@/components/app/status-badge";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { dateTimeId } from "@/lib/format";
+import { dateTimeId, rupiah } from "@/lib/format";
 import { CAN, can } from "@/lib/menu";
-import { usePaginated } from "@/lib/use-api";
-import type { AccountingPeriod } from "@/types/api";
+import { useApi, usePaginated } from "@/lib/use-api";
+import type { AccountingPeriod, BalanceSheet } from "@/types/api";
 
-type PeriodAction = "close_period" | "reopen_period" | "submit_period";
+type PeriodAction = "submit_period" | "close_period" | "reopen_period";
 
+/**
+ * Halaman Rekonsiliasi dan Tutup Buku:
+ * paritas penuh dengan templates/period.html.
+ */
 export default function AccountingPeriodsPage() {
   const { session } = useAuth();
-  const canManage = can(CAN.managePeriods, session?.role);
-  const { data, loading, error, page, setPage, totalPages, reload } = usePaginated<AccountingPeriod>(
+  const role = session?.role;
+  const canManage = can(CAN.managePeriods, role);
+
+  const { data, loading, error, reload } = usePaginated<AccountingPeriod>(
     "/finance/accounting-periods/",
   );
+  const balance = useApi<BalanceSheet>("/finance/reports/balance-sheet/");
 
-  const [action, setAction] = useState<{ type: PeriodAction; period: AccountingPeriod } | null>(null);
-  const [reason, setReason] = useState("");
+  const periods = data?.results ?? [];
+  const [selectedId, setSelectedId] = useState<number | "">("");
+  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const runAction = async () => {
-    if (!action) return;
+  const activePeriod =
+    periods.find((p) => p.id === selectedId) ?? periods[0] ?? null;
+
+  const handleAction = async (actionType: PeriodAction) => {
+    if (!activePeriod) return;
+    if (!note.trim()) {
+      toast.error("Isi catatan pemeriksaan atau alasan terlebih dahulu.");
+      return;
+    }
     setBusy(true);
     try {
       const body: Record<string, unknown> =
-        action.type === "reopen_period" ? { reason } : {};
-      await apiPost(`/finance/accounting-periods/${action.period.id}/${action.type}/`, body);
-      const label =
-        action.type === "close_period"
-          ? "ditutup (CLOSED)"
-          : action.type === "reopen_period"
-            ? "dibuka kembali (OPEN)"
-            : "diajukan untuk review (SUBMITTED)";
-      toast.success(`Periode ${action.period.period_name} ${label}.`);
-      setAction(null);
-      setReason("");
+        actionType === "reopen_period" ? { reason: note } : { reason: note };
+      await apiPost(
+        `/finance/accounting-periods/${activePeriod.id}/${actionType}/`,
+        body,
+      );
+      toast.success(`Status periode ${activePeriod.period_name} diperbarui.`);
+      setNote("");
       reload();
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Gagal memproses aksi periode.", { duration: 8000 });
+      toast.error(
+        err instanceof ApiError ? err.message : "Gagal memproses periode akuntansi.",
+        { duration: 8000 },
+      );
     } finally {
       setBusy(false);
     }
   };
 
-  const columns: Column<AccountingPeriod>[] = [
-    {
-      key: "period_name",
-      header: "Nama Periode",
-      render: (row) => <span className="font-medium">{row.period_name}</span>,
-    },
-    {
-      key: "start_date",
-      header: "Rentang",
-      render: (row) => (
-        <span className="text-sm whitespace-nowrap">
-          {row.start_date} s.d. {row.end_date}
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => <StatusBadge status={row.status} />,
-    },
-    {
-      key: "closed",
-      header: "Ditutup Oleh",
-      render: (row) =>
-        row.closed_by_name ? (
-          <span className="text-sm">{`${row.closed_by_name} · ${dateTimeId(row.closed_at)}`}</span>
-        ) : (
-          <span className="text-sm text-muted-foreground">-</span>
-        ),
-    },
-    {
-      key: "reopen_reason",
-      header: "Alasan Buka Ulang",
-      render: (row) => <span className="text-sm text-muted-foreground">{row.reopen_reason || "-"}</span>,
-    },
-    ...(canManage
-      ? [
-          {
-            key: "actions",
-            header: "Aksi",
-            render: (row: AccountingPeriod) => (
-              <div className="flex items-center gap-1">
-                {row.status === "OPEN" ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAction({ type: "submit_period", period: row })}
-                  >
-                    <Send /> Ajukan
-                  </Button>
-                ) : null}
-                {row.status !== "CLOSED" ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAction({ type: "close_period", period: row })}
-                  >
-                    <Lock /> Tutup
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setReason("");
-                      setAction({ type: "reopen_period", period: row });
-                    }}
-                  >
-                    <LockOpen /> Buka Ulang
-                  </Button>
-                )}
-              </div>
-            ),
-          } satisfies Column<AccountingPeriod>,
-        ]
-      : []),
-  ];
-
-  const dialogText: Record<PeriodAction, { title: string; description: string; confirm: string }> = {
-    close_period: {
-      title: "Tutup Periode Akuntansi",
-      description:
-        "Periode yang ditutup menolak semua posting jurnal baru. Hanya dapat dibuka ulang dengan alasan.",
-      confirm: "Ya, Tutup Periode",
-    },
-    reopen_period: {
-      title: "Buka Ulang Periode",
-      description:
-        "Periode akan kembali berstatus OPEN. Alasan pembukaan kembali wajib diisi untuk jejak audit.",
-      confirm: "Buka Ulang Periode",
-    },
-    submit_period: {
-      title: "Ajukan Periode untuk Review",
-      description:
-        "Periode akan berstatus SUBMITTED dan menunggu penutupan final oleh Accounting/Direktur.",
-      confirm: "Ajukan Periode",
-    },
-  };
+  const bs = balance.data;
+  const reconItems = bs
+    ? [
+        { label: "Kas & Bank", value: bs.assets.kas_dan_bank.subtotal },
+        { label: "Piutang", value: bs.assets.piutang_usaha },
+        { label: "Utang", value: bs.liabilities.hutang_usaha_supplier },
+        { label: "Persediaan", value: bs.assets.persediaan_barang_dagang },
+      ]
+    : [];
 
   return (
     <div>
-      <PageHeader
-        title="Periode Akuntansi"
-        description="Siklus tutup buku bulanan. Transaksi tidak dapat diposting ke periode yang berstatus CLOSED."
-      />
-      <DataTable
-        columns={columns}
-        rows={data?.results}
-        getKey={(row) => row.id}
-        loading={loading}
-        error={error}
-        emptyText="Belum ada periode akuntansi."
-        searchable
-        searchPlaceholder="Cari nama periode…"
-        page={page}
-        totalPages={totalPages}
-        total={data?.count}
-        onPageChange={setPage}
-      />
+      <h1>Rekonsiliasi dan tutup buku</h1>
 
-      <Dialog open={action !== null} onOpenChange={(open) => !open && setAction(null)}>
-        <DialogContent className="max-w-md">
-          {action ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>{dialogText[action.type].title}</DialogTitle>
-                <DialogDescription>
-                  {dialogText[action.type].description} Periode:{" "}
-                  <span className="font-medium text-foreground">{action.period.period_name}</span>.
-                </DialogDescription>
-              </DialogHeader>
-              {action.type === "reopen_period" ? (
-                <div className="space-y-1.5">
-                  <Label htmlFor="reopen-reason">Alasan pembukaan kembali *</Label>
-                  <Input
-                    id="reopen-reason"
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    placeholder="Koreksi jurnal periode …"
-                  />
-                </div>
+      {periods.length > 0 ? (
+        <form
+          className="tools"
+          onSubmit={(e) => {
+            e.preventDefault();
+          }}
+        >
+          <label>
+            Periode
+            <select
+              value={activePeriod?.id ?? ""}
+              onChange={(e) => setSelectedId(Number(e.target.value))}
+            >
+              {periods.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.period_name} ({p.start_date} – {p.end_date})
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit">Tampilkan</button>
+        </form>
+      ) : null}
+
+      {activePeriod ? (
+        <form
+          className="panel formgrid"
+          onSubmit={(e) => {
+            e.preventDefault();
+          }}
+        >
+          <h2 className="wide">
+            {activePeriod.period_name} · {statusLabel(activePeriod.status)}
+          </h2>
+
+          {reconItems.map((item) => (
+            <label key={item.label}>
+              {item.label} · buku {rupiah(item.value)}
+              {role === "accounting" && activePeriod.status === "OPEN" ? (
+                <input
+                  type="number"
+                  defaultValue={Math.round(item.value)}
+                  placeholder="Saldo hasil pemeriksaan"
+                />
               ) : null}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setAction(null)} disabled={busy}>
-                  Batal
-                </Button>
-                <Button onClick={runAction} disabled={busy || (action.type === "reopen_period" && reason.trim() === "")}>
-                  {busy ? <Loader2 className="animate-spin" /> : null}
-                  {dialogText[action.type].confirm}
-                </Button>
-              </DialogFooter>
-            </>
+            </label>
+          ))}
+
+          <label className="wide">
+            Catatan pemeriksaan atau alasan
+            <textarea
+              name="note"
+              required
+              maxLength={300}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Catatan hasil pemeriksaan rekonsiliasi atau alasan pembukaan kembali…"
+            />
+          </label>
+
+          {canManage ? (
+            <div className="wide inline-actions">
+              {activePeriod.status === "OPEN" ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => handleAction("submit_period")}
+                >
+                  Ajukan tutup buku
+                </button>
+              ) : null}
+              {activePeriod.status !== "CLOSED" ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => handleAction("close_period")}
+                >
+                  Setujui penutupan
+                </button>
+              ) : null}
+              {activePeriod.status === "CLOSED" ? (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => handleAction("reopen_period")}
+                >
+                  Buka kembali
+                </button>
+              ) : null}
+            </div>
           ) : null}
-        </DialogContent>
-      </Dialog>
+        </form>
+      ) : null}
+
+      <section className="panel pad">
+        <h2>Riwayat periode</h2>
+        {loading ? (
+          <p>Memuat riwayat periode…</p>
+        ) : error ? (
+          <p className="errorlist">{error}</p>
+        ) : periods.length === 0 ? (
+          <p>Belum ada keputusan periode.</p>
+        ) : (
+          <div className="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Periode</th>
+                  <th>Rentang</th>
+                  <th>Status</th>
+                  <th>Ditutup oleh</th>
+                  <th>Catatan / alasan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {periods.map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <a
+                        href="#top"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setSelectedId(p.id);
+                        }}
+                      >
+                        {p.period_name}
+                      </a>
+                    </td>
+                    <td>
+                      {p.start_date} – {p.end_date}
+                    </td>
+                    <td>
+                      <StatusBadge status={p.status} />
+                    </td>
+                    <td>
+                      {p.closed_by_name
+                        ? `${p.closed_by_name} · ${dateTimeId(p.closed_at)}`
+                        : "—"}
+                    </td>
+                    <td>{p.reopen_reason || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

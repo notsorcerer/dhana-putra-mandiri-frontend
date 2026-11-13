@@ -1,11 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Scale } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { KpiCard } from "@/components/app/kpi-card";
+import { SvgIcon } from "@/components/app/svg-sprites";
 import { num, rupiah, todayIso } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import type { BalanceSheet } from "@/types/api";
@@ -16,67 +13,101 @@ export default function BalanceSheetPage() {
 
   const renderSection = (
     title: string,
+    subtitle: string,
     rows: { label: string; value: number; strong?: boolean }[],
   ) => (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableBody>
-            {rows.map((row) => (
-              <TableRow key={row.label}>
-                <TableCell className={row.strong ? "font-semibold" : undefined}>{row.label}</TableCell>
-                <TableCell className={`text-right tabular-nums ${row.strong ? "font-semibold" : ""}`}>
-                  {rupiah(row.value)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <section className="panel scroll">
+      <div className="panelhead">
+        <div>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Komponen</th>
+            <th className="text-right">Nilai</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label}>
+              <td>{row.strong ? <strong>{row.label}</strong> : row.label}</td>
+              <td className="text-right tabular-nums">
+                {row.strong ? <strong>{rupiah(row.value)}</strong> : rupiah(row.value)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <Scale className="size-5 text-primary" />
-            Neraca (Balance Sheet)
-          </h2>
-          <p className="text-sm text-muted-foreground">Posisi keuangan per tanggal tertentu.</p>
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="as-of" className="text-xs font-medium text-muted-foreground">
-            Per Tanggal
-          </label>
-          <Input id="as-of" type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="w-44" />
-        </div>
-      </div>
+    <div className="space-y-4">
+      <form className="table-tools" onSubmit={(e) => e.preventDefault()}>
+        <label htmlFor="as-of">
+          Per tanggal neraca
+          <Input id="as-of" type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+        </label>
+      </form>
 
       {loading ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">Menyusun neraca…</p>
+        <section className="panel">
+          <div className="empty-state">
+            <SvgIcon name="doc" />
+            <p>Menyusun neraca…</p>
+          </div>
+        </section>
       ) : error ? (
-        <p className="py-10 text-center text-sm text-destructive">{error}</p>
+        <section className="panel">
+          <div className="empty-state">
+            <SvgIcon name="alert" />
+            <p className="text-destructive">{error}</p>
+          </div>
+        </section>
       ) : data ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard title="Total Aktiva" value={rupiah(data.assets.total_assets)} />
-            <KpiCard title="Total Kewajiban" value={rupiah(data.liabilities.total_liabilities)} />
-            <KpiCard title="Total Ekuitas" value={rupiah(data.equity.total_equity)} />
-            <KpiCard
-              title="Selisih Neraca"
-              value={rupiah(data.summary.difference)}
-              tone={data.summary.is_balanced ? "positive" : "negative"}
-              hint={data.summary.is_balanced ? "Neraca seimbang (D = K)" : "Neraca belum seimbang"}
-            />
-          </div>
+          <section className="metric-grid" aria-label="Ringkasan posisi neraca">
+            <article className="metric">
+              <div>
+                <span>Total Aktiva</span>
+                <SvgIcon name="wallet" />
+              </div>
+              <strong>{rupiah(data.assets.total_assets)}</strong>
+              <small>Kas, piutang, dan persediaan</small>
+            </article>
+            <article className="metric">
+              <div>
+                <span>Total Kewajiban</span>
+                <SvgIcon name="receipt" />
+              </div>
+              <strong>{rupiah(data.liabilities.total_liabilities)}</strong>
+              <small>Hutang usaha, gaji, dan bongkar</small>
+            </article>
+            <article className="metric">
+              <div>
+                <span>Total Ekuitas</span>
+                <SvgIcon name="layers" />
+              </div>
+              <strong>{rupiah(data.equity.total_equity)}</strong>
+              <small>Modal disetor & laba berjalan</small>
+            </article>
+            <article className="metric">
+              <div>
+                <span>Selisih Neraca</span>
+                <SvgIcon name="report" />
+              </div>
+              <strong>{rupiah(data.summary.difference)}</strong>
+              <small className={data.summary.is_balanced ? "up" : "down"}>
+                {data.summary.is_balanced ? "Neraca seimbang (D = K)" : "Neraca belum seimbang"}
+              </small>
+            </article>
+          </section>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            {renderSection("Aktiva", [
+            {renderSection("Aktiva", "Posisi harta lancar & persediaan", [
               { label: "Kas Tunai", value: num(data.assets.kas_dan_bank.kas_tunai) },
               { label: "Bank BCA", value: num(data.assets.kas_dan_bank.bank_bca) },
               { label: "Bank Mandiri", value: num(data.assets.kas_dan_bank.bank_mandiri) },
@@ -85,13 +116,13 @@ export default function BalanceSheetPage() {
               { label: "Persediaan Barang Dagang", value: num(data.assets.persediaan_barang_dagang) },
               { label: "Total Aktiva", value: num(data.assets.total_assets), strong: true },
             ])}
-            {renderSection("Kewajiban", [
+            {renderSection("Kewajiban", "Kewajiban jangka pendek", [
               { label: "Hutang Usaha Supplier", value: num(data.liabilities.hutang_usaha_supplier) },
               { label: "Hutang Gaji & Upah", value: num(data.liabilities.hutang_gaji_upah) },
               { label: "Hutang Ongkos Bongkar", value: num(data.liabilities.hutang_ongkos_bongkar) },
               { label: "Total Kewajiban", value: num(data.liabilities.total_liabilities), strong: true },
             ])}
-            {renderSection("Ekuitas", [
+            {renderSection("Ekuitas", "Modal dan akumulasi laba", [
               { label: "Modal Disetor", value: num(data.equity.modal_disetor) },
               { label: "Laba Ditahan", value: num(data.equity.laba_ditahan) },
               { label: "Laba Periode Berjalan", value: num(data.equity.laba_periode_berjalan) },
@@ -99,42 +130,40 @@ export default function BalanceSheetPage() {
             ])}
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Ringkasan</CardTitle>
-              <CardDescription>
-                Per tanggal {data.as_of_date} — total aktiva vs total kewajiban & ekuitas.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Komponen</TableHead>
-                    <TableHead className="text-right">Nilai</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>Total Aktiva</TableCell>
-                    <TableCell className="text-right tabular-nums">{rupiah(data.summary.total_assets)}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Total Kewajiban & Ekuitas</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {rupiah(data.summary.total_liabilities_and_equity)}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-semibold">Selisih</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {rupiah(data.summary.difference)}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <section className="panel scroll">
+            <div className="panelhead">
+              <div>
+                <h2>Ringkasan keseimbangan neraca</h2>
+                <p>Per tanggal {data.as_of_date} — total aktiva vs total kewajiban & ekuitas.</p>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Komponen</th>
+                  <th className="text-right">Nilai</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Total Aktiva</td>
+                  <td className="text-right tabular-nums">{rupiah(data.summary.total_assets)}</td>
+                </tr>
+                <tr>
+                  <td>Total Kewajiban & Ekuitas</td>
+                  <td className="text-right tabular-nums">{rupiah(data.summary.total_liabilities_and_equity)}</td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Selisih</strong>
+                  </td>
+                  <td className="text-right tabular-nums">
+                    <strong>{rupiah(data.summary.difference)}</strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
         </>
       ) : null}
     </div>

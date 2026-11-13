@@ -1,30 +1,36 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { PageHeader } from "@/components/app/page-header";
+import { PeriodFilter } from "@/components/app/period-filter";
 import { StatusBadge } from "@/components/app/status-badge";
 import { useAuth } from "@/lib/auth";
-import { CAN, can } from "@/lib/menu";
 import { dateId, rupiah } from "@/lib/format";
+import { CAN, can } from "@/lib/menu";
 import { usePaginated } from "@/lib/use-api";
 import type { SalesInvoice } from "@/types/api";
 
 export default function SalesInvoicesPage() {
   const { session } = useAuth();
   const canCreate = can(CAN.createInvoice, session?.role);
-  const { data, loading, error, page, setPage, totalPages } = usePaginated<SalesInvoice>(
-    "/finance/sales-invoices/",
-  );
+  const { data, loading, error, page, setPage, totalPages } =
+    usePaginated<SalesInvoice>("/finance/sales-invoices/");
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const rows = useMemo(() => {
+    const list = data?.results ?? [];
+    if (!statusFilter) return list;
+    return list.filter((r) => r.status === statusFilter);
+  }, [data, statusFilter]);
 
   const columns: Column<SalesInvoice>[] = [
     {
       key: "invoice_number",
-      header: "Nomor Faktur",
+      header: "Faktur / draf",
       render: (row) => (
-        <Link href={`/sales-invoices/${row.id}`} className="font-medium text-primary underline-offset-4 hover:underline">
+        <Link href={`/sales-invoices/${row.id}`} className="doc-number">
           {row.invoice_number}
         </Link>
       ),
@@ -32,7 +38,7 @@ export default function SalesInvoicesPage() {
     {
       key: "customer_name",
       header: "Pelanggan",
-      render: (row) => <span className="text-sm">{row.customer_name || "-"}</span>,
+      render: (row) => row.customer_name || "Internal",
     },
     {
       key: "invoice_date",
@@ -40,64 +46,66 @@ export default function SalesInvoicesPage() {
       render: (row) => dateId(row.invoice_date),
     },
     {
+      key: "terms",
+      header: "Pembayaran",
+      render: (row) => (row.invoice_date === row.due_date ? "Tunai" : "Tempo"),
+    },
+    {
       key: "due_date",
-      header: "Jatuh Tempo",
-      render: (row) => dateId(row.due_date),
+      header: "Jatuh tempo",
+      render: (row) => (row.due_date ? dateId(row.due_date) : "—"),
     },
     {
       key: "total_amount",
-      header: "Total",
-      className: "text-right",
-      render: (row) => <span className="tabular-nums">{rupiah(row.total_amount)}</span>,
-    },
-    {
-      key: "paid_amount",
-      header: "Terbayar",
-      className: "text-right",
-      render: (row) => <span className="tabular-nums">{rupiah(row.paid_amount)}</span>,
+      header: "Total (Rp)",
+      render: (row) => rupiah(row.total_amount),
     },
     {
       key: "status",
       header: "Status",
       render: (row) => <StatusBadge status={row.status} />,
     },
-    {
-      key: "open",
-      header: "",
-      render: (row) => (
-        <Button variant="ghost" size="icon-sm" asChild aria-label="Buka detail">
-          <Link href={`/sales-invoices/${row.id}`}>
-            <ArrowRight />
-          </Link>
-        </Button>
-      ),
-    },
   ];
 
   return (
     <div>
-      <PageHeader
-        title="Faktur Penjualan"
-        description="Faktur piutang pelanggan. Status pembayaran diperbarui dari pembayaran (BKM) yang terkait."
-      >
+      <PageHeader title="Pesanan">
+        <PeriodFilter />
         {canCreate ? (
-          <Button size="sm" asChild>
-            <Link href="/sales-invoices/new">
-              <Plus /> Buat Faktur
-            </Link>
-          </Button>
+          <Link className="button" href="/sales-invoices/new">
+            Buat faktur
+          </Link>
         ) : null}
       </PageHeader>
 
       <DataTable
         columns={columns}
-        rows={data?.results}
+        rows={rows}
         getKey={(row) => row.id}
         loading={loading}
         error={error}
-        emptyText="Belum ada faktur penjualan."
         searchable
-        searchPlaceholder="Cari nomor / pelanggan…"
+        searchPlaceholder="Cari nomor dokumen atau mitra…"
+        toolbar={
+          <>
+            <label className="sr-only" htmlFor="status">
+              Status dokumen
+            </label>
+            <select
+              id="status"
+              name="status"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="">Semua status</option>
+              <option value="draft">Draft</option>
+              <option value="unpaid">Belum Dibayar</option>
+              <option value="partially_paid">Dibayar Sebagian</option>
+              <option value="paid">Lunas</option>
+              <option value="cancelled">Dibatalkan</option>
+            </select>
+          </>
+        }
         page={page}
         totalPages={totalPages}
         total={data?.count}

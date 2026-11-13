@@ -1,107 +1,74 @@
 "use client";
 
-import { useState } from "react";
-import { Pencil, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { PageHeader } from "@/components/app/page-header";
 import { useAuth } from "@/lib/auth";
-import { CAN, can } from "@/lib/menu";
 import { rupiah } from "@/lib/format";
+import { CAN, can } from "@/lib/menu";
 import { usePaginated } from "@/lib/use-api";
 import type { Customer } from "@/types/api";
-import { CustomerFormDialog } from "./customer-form";
 
 export default function CustomersPage() {
   const { session } = useAuth();
   const canManage = can(CAN.manageMasterData, session?.role);
-  const { data, loading, error, page, setPage, totalPages, reload } = usePaginated<Customer>(
-    "/finance/customers/",
-  );
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Customer | null>(null);
+  const { data, loading, error, page, setPage, totalPages } =
+    usePaginated<Customer>("/finance/customers/");
 
   const columns: Column<Customer>[] = [
     {
       key: "code",
       header: "Kode",
-      render: (row) => <span className="font-medium">{row.code}</span>,
+      render: (row) =>
+        canManage ? (
+          <Link href={`/customers/${row.id}/edit`} className="doc-number">
+            {row.code}
+          </Link>
+        ) : (
+          <span className="doc-number">{row.code}</span>
+        ),
     },
     {
       key: "name",
-      header: "Nama Pelanggan",
-      render: (row) => (
-        <div>
-          <p className="font-medium">{row.name}</p>
-          <p className="text-xs text-muted-foreground">{row.contact_person || "-"}</p>
-        </div>
-      ),
+      header: "Nama pelanggan",
+      render: (row) => row.name,
+    },
+    {
+      key: "contact_person",
+      header: "Narahubung",
+      render: (row) => row.contact_person || "—",
     },
     {
       key: "phone",
       header: "Telepon",
-      render: (row) => row.phone || "-",
+      render: (row) => row.phone || "—",
     },
     {
       key: "credit_limit",
-      header: "Batas Kredit",
-      className: "text-right",
-      render: (row) => <span className="tabular-nums">{rupiah(row.credit_limit)}</span>,
+      header: "Batas kredit (Rp)",
+      render: (row) => rupiah(row.credit_limit),
     },
     {
       key: "is_active",
       header: "Status",
-      render: (row) =>
-        row.is_active ? (
-          <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
-            Aktif
-          </span>
-        ) : (
-          <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">
-            Nonaktif
-          </span>
-        ),
+      render: (row) => (
+        <span
+          className="status-chip"
+          data-tone={row.is_active ? "positive" : undefined}
+        >
+          {row.is_active ? "Aktif" : "Nonaktif"}
+        </span>
+      ),
     },
-    ...(canManage
-      ? [
-          {
-            key: "actions",
-            header: "",
-            render: (row: Customer) => (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Ubah pelanggan"
-                onClick={() => {
-                  setEditing(row);
-                  setDialogOpen(true);
-                }}
-              >
-                <Pencil />
-              </Button>
-            ),
-          } satisfies Column<Customer>,
-        ]
-      : []),
   ];
 
   return (
     <div>
-      <PageHeader
-        title="Pelanggan"
-        description="Master data pelanggan (toko / distribusi) beserta batas kredit. Hanya Direktur yang dapat mengubah data."
-      >
+      <PageHeader title="Pelanggan">
         {canManage ? (
-          <Button
-            size="sm"
-            onClick={() => {
-              setEditing(null);
-              setDialogOpen(true);
-            }}
-          >
-            <Plus /> Tambah Pelanggan
-          </Button>
+          <Link className="button" href="/customers/new">
+            Tambah data
+          </Link>
         ) : null}
       </PageHeader>
 
@@ -111,23 +78,12 @@ export default function CustomersPage() {
         getKey={(row) => row.id}
         loading={loading}
         error={error}
-        emptyText="Belum ada pelanggan terdaftar."
         searchable
-        searchPlaceholder="Cari kode / nama pelanggan…"
+        searchPlaceholder="Cari kode atau nama pelanggan…"
         page={page}
         totalPages={totalPages}
         total={data?.count}
         onPageChange={setPage}
-      />
-
-      <CustomerFormDialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open) setEditing(null);
-        }}
-        customer={editing}
-        onSaved={reload}
       />
     </div>
   );

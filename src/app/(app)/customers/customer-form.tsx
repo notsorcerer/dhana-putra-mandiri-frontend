@@ -1,21 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { FormPage } from "@/components/app/form-page";
 import { apiPatch, apiPost } from "@/lib/api";
 import type { Customer } from "@/types/api";
 
@@ -41,60 +32,42 @@ const EMPTY: CustomerFormValues = {
   is_active: true,
 };
 
-/** Dialog tambah/ubah pelanggan (hanya untuk Direktur). */
-export function CustomerFormDialog({
-  open,
-  onOpenChange,
-  customer,
-  onSaved,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  customer?: Customer | null;
-  onSaved: () => void;
-}) {
-  const [values, setValues] = useState<CustomerFormValues>(EMPTY);
-  const [saving, setSaving] = useState(false);
-  const editing = customer != null;
+function toValues(customer: Customer): CustomerFormValues {
+  return {
+    code: customer.code,
+    name: customer.name,
+    contact_person: customer.contact_person ?? "",
+    phone: customer.phone ?? "",
+    email: customer.email ?? "",
+    address: customer.address ?? "",
+    credit_limit: customer.credit_limit ?? "0.00",
+    is_active: customer.is_active,
+  };
+}
 
-  useEffect(() => {
-    if (open) {
-      // Isi ulang form dari data pelanggan terpilih saat dialog dibuka.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setValues(
-        customer
-          ? {
-              code: customer.code,
-              name: customer.name,
-              contact_person: customer.contact_person ?? "",
-              phone: customer.phone ?? "",
-              email: customer.email ?? "",
-              address: customer.address ?? "",
-              credit_limit: customer.credit_limit ?? "0.00",
-              is_active: customer.is_active,
-            }
-          : EMPTY,
-      );
-    }
-  }, [open, customer]);
+/** Halaman tambah/ubah pelanggan (hanya untuk Direktur). */
+export function CustomerForm({ customer }: { customer?: Customer | null }) {
+  const router = useRouter();
+  const editing = customer != null;
+  const [values, setValues] = useState<CustomerFormValues>(customer ? toValues(customer) : EMPTY);
+  const [saving, setSaving] = useState(false);
 
   const set = <K extends keyof CustomerFormValues>(key: K, value: CustomerFormValues[K]) => {
     setValues((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
     try {
       if (editing) {
-        await apiPatch<Customer>(`/finance/customers/${customer!.id}/`, values);
+        await apiPatch<Customer>(`/finance/customers/${customer.id}/`, values);
         toast.success(`Pelanggan ${values.name} berhasil diperbarui.`);
       } else {
         await apiPost<Customer>("/finance/customers/", values);
         toast.success(`Pelanggan ${values.name} berhasil ditambahkan.`);
       }
-      onOpenChange(false);
-      onSaved();
+      router.push("/customers");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal menyimpan pelanggan.");
     } finally {
@@ -103,66 +76,96 @@ export function CustomerFormDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Ubah Pelanggan" : "Tambah Pelanggan"}</DialogTitle>
-          <DialogDescription>
-            Kode pelanggan wajib unik. Batas kredit dipakai sebagai acuan piutang.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="cust-code">Kode *</Label>
-              <Input id="cust-code" required value={values.code} onChange={(e) => set("code", e.target.value)} placeholder="CUS-001" disabled={editing} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cust-name">Nama *</Label>
-              <Input id="cust-name" required value={values.name} onChange={(e) => set("name", e.target.value)} placeholder="Toko Berkah Minyak" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cust-contact">Narahubung</Label>
-              <Input id="cust-contact" value={values.contact_person} onChange={(e) => set("contact_person", e.target.value)} placeholder="Pak Dedi" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cust-phone">Telepon</Label>
-              <Input id="cust-phone" value={values.phone} onChange={(e) => set("phone", e.target.value)} placeholder="0812-3456-7890" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cust-email">Email</Label>
-              <Input id="cust-email" type="email" value={values.email} onChange={(e) => set("email", e.target.value)} placeholder="toko@email.com" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cust-limit">Batas Kredit</Label>
-              <Input id="cust-limit" type="number" min="0" step="0.01" value={values.credit_limit} onChange={(e) => set("credit_limit", e.target.value)} />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="cust-address">Alamat</Label>
-            <Textarea id="cust-address" rows={2} value={values.address} onChange={(e) => set("address", e.target.value)} />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Checkbox id="cust-active" checked={values.is_active} onCheckedChange={(v) => set("is_active", v === true)} />
-            <Label htmlFor="cust-active" className="font-normal">
-              Pelanggan aktif
-            </Label>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              Batal
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? <Loader2 className="animate-spin" /> : null}
-              {editing ? "Simpan Perubahan" : "Tambah Pelanggan"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <FormPage
+      eyebrow="DATA MASTER"
+      title={editing ? "Ubah pelanggan" : "Tambah pelanggan"}
+      description="Kode pelanggan wajib unik. Batas kredit dipakai sebagai acuan piutang."
+      sectionTitle="Identitas pelanggan"
+      sectionDescription="Data kontak dan batas kredit membantu penagihan serta penerimaan piutang."
+      backHref="/customers"
+      onSubmit={handleSubmit}
+      saving={saving}
+      submitLabel={editing ? "Simpan perubahan" : "Tambah pelanggan"}
+    >
+      <label>
+        Kode *
+        <Input
+          id="cust-code"
+          required
+          value={values.code}
+          onChange={(e) => set("code", e.target.value)}
+          placeholder="CUS-001"
+          disabled={editing}
+        />
+      </label>
+      <label>
+        Nama *
+        <Input
+          id="cust-name"
+          required
+          value={values.name}
+          onChange={(e) => set("name", e.target.value)}
+          placeholder="Toko Berkah Minyak"
+        />
+      </label>
+      <label>
+        Narahubung
+        <Input
+          id="cust-contact"
+          value={values.contact_person}
+          onChange={(e) => set("contact_person", e.target.value)}
+          placeholder="Pak Dedi"
+        />
+      </label>
+      <label>
+        Telepon
+        <Input
+          id="cust-phone"
+          value={values.phone}
+          onChange={(e) => set("phone", e.target.value)}
+          placeholder="0812-3456-7890"
+        />
+      </label>
+      <label>
+        Email
+        <Input
+          id="cust-email"
+          type="email"
+          value={values.email}
+          onChange={(e) => set("email", e.target.value)}
+          placeholder="toko@email.com"
+        />
+      </label>
+      <label>
+        Batas kredit
+        <Input
+          id="cust-limit"
+          type="number"
+          min="0"
+          step="0.01"
+          value={values.credit_limit}
+          onChange={(e) => set("credit_limit", e.target.value)}
+        />
+      </label>
+      <label className="wide">
+        Alamat
+        <Textarea
+          id="cust-address"
+          rows={2}
+          value={values.address}
+          onChange={(e) => set("address", e.target.value)}
+        />
+      </label>
+      <div className="wide flex items-center gap-2">
+        <Checkbox
+          id="cust-active"
+          checked={values.is_active}
+          onCheckedChange={(v) => set("is_active", v === true)}
+        />
+        <label htmlFor="cust-active" className="text-[13px] font-normal">
+          Pelanggan aktif
+        </label>
+      </div>
+    </FormPage>
   );
 }

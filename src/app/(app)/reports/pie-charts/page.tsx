@@ -1,10 +1,7 @@
 "use client";
 
-import { ChartPie } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DistributionPieChart } from "@/components/app/charts";
-import { KpiCard } from "@/components/app/kpi-card";
+import { SvgIcon } from "@/components/app/svg-sprites";
 import { num, pct, qty, rupiah } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import type { PieChartsReport } from "@/types/api";
@@ -13,24 +10,49 @@ export default function PieChartsPage() {
   const { data, loading, error } = useApi<PieChartsReport>("/finance/reports/pie-charts/");
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <ChartPie className="size-5 text-primary" />
-          Distribusi Persediaan
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Proporsi nilai stok berdasarkan merek dan ukuran kemasan produk.
-        </p>
-      </div>
-
+    <div className="space-y-4">
       {loading ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">Memuat analitik persediaan…</p>
+        <section className="panel">
+          <div className="empty-state">
+            <SvgIcon name="doc" />
+            <p>Memuat analitik persediaan…</p>
+          </div>
+        </section>
       ) : error ? (
-        <p className="py-10 text-center text-sm text-destructive">{error}</p>
+        <section className="panel">
+          <div className="empty-state">
+            <SvgIcon name="alert" />
+            <p className="text-destructive">{error}</p>
+          </div>
+        </section>
       ) : data ? (
         <>
-          <KpiCard title="Total Nilai Persediaan" value={rupiah(data.total_portfolio_value)} />
+          <section className="metric-grid" aria-label="Ringkasan nilai persediaan">
+            <article className="metric">
+              <div>
+                <span>Total Nilai Persediaan</span>
+                <SvgIcon name="box" />
+              </div>
+              <strong>{rupiah(data.total_portfolio_value)}</strong>
+              <small>Akumulasi seluruh gudang</small>
+            </article>
+            <article className="metric">
+              <div>
+                <span>Jumlah Merek</span>
+                <SvgIcon name="layers" />
+              </div>
+              <strong>{data.brand_distribution.length} merek</strong>
+              <small>Distribusi portofolio merek</small>
+            </article>
+            <article className="metric">
+              <div>
+                <span>Varian Kemasan</span>
+                <SvgIcon name="bag" />
+              </div>
+              <strong>{data.package_size_distribution.length} ukuran</strong>
+              <small>Distribusi ukuran kemasan</small>
+            </article>
+          </section>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <DistributionPieChart
@@ -48,48 +70,54 @@ export default function PieChartsPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             {(
               [
-                { title: "Rincian per Merek", rows: data.brand_distribution },
-                { title: "Rincian per Kemasan", rows: data.package_size_distribution },
+                { title: "Rincian per merek", rows: data.brand_distribution },
+                { title: "Rincian per kemasan", rows: data.package_size_distribution },
               ] as const
             ).map((section) => (
-              <Card key={section.title}>
-                <CardHeader>
-                  <CardTitle>{section.title}</CardTitle>
-                  <CardDescription>Nilai stok, kuantitas, dan kontribusi</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Kategori</TableHead>
-                        <TableHead className="text-right">Kuantitas</TableHead>
-                        <TableHead className="text-right">Nilai Stok</TableHead>
-                        <TableHead className="text-right">Kontribusi</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {section.rows.map((row) => (
-                        <TableRow key={row.label}>
-                          <TableCell className="font-medium">{row.label}</TableCell>
-                          <TableCell className="text-right tabular-nums">{qty(row.stock_qty)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{rupiah(row.stock_value)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{pct(row.percentage)}</TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell className="font-semibold">Total</TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">
-                          {qty(section.rows.reduce((s, r) => s + num(r.stock_qty), 0))}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">
-                          {rupiah(section.rows.reduce((s, r) => s + num(r.stock_value), 0))}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">100%</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+              <section key={section.title} className="panel scroll">
+                <div className="panelhead">
+                  <div>
+                    <h2>{section.title}</h2>
+                    <p>Nilai stok, kuantitas, dan persentase kontribusi.</p>
+                  </div>
+                </div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Kategori</th>
+                      <th className="text-right">Kuantitas</th>
+                      <th className="text-right">Nilai Stok</th>
+                      <th className="text-right">Kontribusi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.rows.map((row) => (
+                      <tr key={row.label}>
+                        <td>
+                          <strong>{row.label}</strong>
+                        </td>
+                        <td className="text-right tabular-nums">{qty(row.stock_qty)}</td>
+                        <td className="text-right tabular-nums">{rupiah(row.stock_value)}</td>
+                        <td className="text-right tabular-nums">{pct(row.percentage)}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td>
+                        <strong>Total</strong>
+                      </td>
+                      <td className="text-right tabular-nums">
+                        <strong>{qty(section.rows.reduce((s, r) => s + num(r.stock_qty), 0))}</strong>
+                      </td>
+                      <td className="text-right tabular-nums">
+                        <strong>{rupiah(section.rows.reduce((s, r) => s + num(r.stock_value), 0))}</strong>
+                      </td>
+                      <td className="text-right tabular-nums">
+                        <strong>100%</strong>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </section>
             ))}
           </div>
         </>

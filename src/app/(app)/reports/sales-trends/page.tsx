@@ -1,11 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { LineChart as LineChartIcon } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SalesTrendChart } from "@/components/app/charts";
-import { KpiCard } from "@/components/app/kpi-card";
+import { SvgIcon } from "@/components/app/svg-sprites";
 import { availableYears, num, pct, qty, rupiah } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import type { SalesTrendsReport } from "@/types/api";
@@ -21,89 +18,109 @@ export default function SalesTrendsPage() {
   const activeMonths = trends.filter((t) => num(t.total_sales) > 0).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <LineChartIcon className="size-5 text-primary" />
-            Tren Penjualan 12 Bulan
-          </h2>
-          <p className="text-sm text-muted-foreground">Pendapatan, volume, dan laba kotor per bulan.</p>
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="trend-year" className="text-xs font-medium text-muted-foreground">
-            Tahun
-          </label>
-          <select
-            id="trend-year"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="h-9 w-32 rounded-md border border-input bg-transparent px-3 text-sm"
-          >
+    <div className="space-y-4">
+      <form className="table-tools" onSubmit={(e) => e.preventDefault()}>
+        <label htmlFor="trend-year">
+          Tahun laporan
+          <select id="trend-year" value={year} onChange={(e) => setYear(e.target.value)}>
             {years.map((y) => (
               <option key={y} value={y}>
                 {y}
               </option>
             ))}
           </select>
-        </div>
-      </div>
+        </label>
+      </form>
 
       {loading ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">Memuat tren penjualan…</p>
+        <section className="panel">
+          <div className="empty-state">
+            <SvgIcon name="doc" />
+            <p>Memuat tren penjualan…</p>
+          </div>
+        </section>
       ) : error ? (
-        <p className="py-10 text-center text-sm text-destructive">{error}</p>
+        <section className="panel">
+          <div className="empty-state">
+            <SvgIcon name="alert" />
+            <p className="text-destructive">{error}</p>
+          </div>
+        </section>
       ) : data ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard title="Total Penjualan" value={rupiah(totalSales)} hint={`${activeMonths} bulan aktif`} />
-            <KpiCard title="Laba Kotor" value={rupiah(totalProfit)} tone="positive" />
-            <KpiCard
-              title="Margin Kotor"
-              value={totalSales > 0 ? pct((totalProfit / totalSales) * 100) : "-"}
-              tone="positive"
-            />
-            <KpiCard
-              title="Total Volume"
-              value={qty(trends.reduce((s, t) => s + num(t.total_volume), 0))}
-              hint="Karton terkirim"
-            />
-          </div>
+          <section className="metric-grid" aria-label="Ringkasan tren penjualan">
+            <article className="metric">
+              <div>
+                <span>Total Penjualan</span>
+                <SvgIcon name="sales" />
+              </div>
+              <strong>{rupiah(totalSales)}</strong>
+              <small>{activeMonths} bulan aktif</small>
+            </article>
+            <article className="metric">
+              <div>
+                <span>Laba Kotor</span>
+                <SvgIcon name="trend" />
+              </div>
+              <strong>{rupiah(totalProfit)}</strong>
+              <small className="up">Akumulasi tahun {data.year}</small>
+            </article>
+            <article className="metric">
+              <div>
+                <span>Margin Kotor</span>
+                <SvgIcon name="percent" />
+              </div>
+              <strong>{totalSales > 0 ? pct((totalProfit / totalSales) * 100) : "-"}</strong>
+              <small className="up">Rasio laba kotor terhadap omzet</small>
+            </article>
+            <article className="metric">
+              <div>
+                <span>Total Volume</span>
+                <SvgIcon name="box" />
+              </div>
+              <strong>{qty(trends.reduce((s, t) => s + num(t.total_volume), 0))}</strong>
+              <small>Karton terkirim</small>
+            </article>
+          </section>
 
           <SalesTrendChart trends={data.trends} />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Rincian Bulanan {data.year}</CardTitle>
-              <CardDescription>Periode, penjualan, volume, HPP, dan laba kotor</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Bulan</TableHead>
-                    <TableHead>Periode</TableHead>
-                    <TableHead className="text-right">Penjualan</TableHead>
-                    <TableHead className="text-right">Volume</TableHead>
-                    <TableHead className="text-right">HPP</TableHead>
-                    <TableHead className="text-right">Laba Kotor</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.trends.map((t) => (
-                    <TableRow key={t.month}>
-                      <TableCell className="font-medium">{t.month_name}</TableCell>
-                      <TableCell className="text-muted-foreground">{t.period || "-"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{rupiah(t.total_sales)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{qty(t.total_volume)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{rupiah(t.total_cogs)}</TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">{rupiah(t.gross_profit)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <section className="panel scroll">
+            <div className="panelhead">
+              <div>
+                <h2>Rincian bulanan {data.year}</h2>
+                <p>Periode, penjualan, volume, HPP, dan laba kotor.</p>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Bulan</th>
+                  <th>Periode</th>
+                  <th className="text-right">Penjualan</th>
+                  <th className="text-right">Volume</th>
+                  <th className="text-right">HPP</th>
+                  <th className="text-right">Laba Kotor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.trends.map((t) => (
+                  <tr key={t.month}>
+                    <td>
+                      <strong>{t.month_name}</strong>
+                    </td>
+                    <td>{t.period || "-"}</td>
+                    <td className="text-right tabular-nums">{rupiah(t.total_sales)}</td>
+                    <td className="text-right tabular-nums">{qty(t.total_volume)}</td>
+                    <td className="text-right tabular-nums">{rupiah(t.total_cogs)}</td>
+                    <td className="text-right tabular-nums">
+                      <strong>{rupiah(t.gross_profit)}</strong>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
         </>
       ) : null}
     </div>

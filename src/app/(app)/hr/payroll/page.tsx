@@ -1,19 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
-import { Banknote, Loader2, Play } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { PageHeader } from "@/components/app/page-header";
@@ -21,7 +13,7 @@ import { StatusBadge } from "@/components/app/status-badge";
 import { ApiError, apiPost, fetchAllPages } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { MONTHS_ID, dateId, rupiah } from "@/lib/format";
-import { CAN, can } from "@/lib/menu";
+import { CAN, can, type Role } from "@/lib/menu";
 import { usePaginated } from "@/lib/use-api";
 import type { ChartOfAccounts, Employee, PayrollSlip } from "@/types/api";
 
@@ -30,6 +22,13 @@ const STATUS_LABELS: Record<string, string> = {
   approved: "Disetujui",
   paid: "Dibayar",
 };
+
+const HR_TABS: { href: string; label: string; roles: readonly Role[] }[] = [
+  { href: "/hr/payroll", label: "Payroll & fee", roles: CAN.viewPayroll },
+  { href: "/hr/employees", label: "Data pegawai", roles: CAN.viewEmployees },
+  { href: "/hr/mutations", label: "Mutasi karyawan", roles: CAN.viewHrOps },
+  { href: "/hr/labor-records", label: "Catatan kerja", roles: CAN.viewLaborRecords },
+];
 
 export default function PayrollPage() {
   const { session } = useAuth();
@@ -43,7 +42,6 @@ export default function PayrollPage() {
   const [accounts, setAccounts] = useState<ChartOfAccounts[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // Dialog generate
   const [generateOpen, setGenerateOpen] = useState(false);
   const [genForm, setGenForm] = useState({
     employee: "",
@@ -55,9 +53,9 @@ export default function PayrollPage() {
     notes: "",
   });
 
-  // Dialog disburse
   const [disburseTarget, setDisburseTarget] = useState<PayrollSlip | null>(null);
   const [disburseAccount, setDisburseAccount] = useState("1120");
+  const visibleTabs = HR_TABS.filter((tab) => can(tab.roles, session?.role));
 
   useEffect(() => {
     if (generateOpen) {
@@ -110,7 +108,8 @@ export default function PayrollPage() {
     }
   };
 
-  const handleDisburse = async () => {
+  const handleDisburse = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!disburseTarget) return;
     setSaving(true);
     try {
@@ -134,17 +133,17 @@ export default function PayrollPage() {
     {
       key: "slip_number",
       header: "Nomor Slip",
-      render: (row) => <span className="font-medium tabular-nums">{row.slip_number}</span>,
+      render: (row) => <strong className="tabular-nums">{row.slip_number}</strong>,
     },
     {
       key: "employee_name",
       header: "Karyawan",
       render: (row) => (
         <div>
-          <p className="font-medium">{row.employee_name}</p>
-          <p className="text-xs text-muted-foreground">
+          <strong>{row.employee_name}</strong>
+          <div className="text-xs text-muted-foreground">
             {row.employee_code} · {row.department}
-          </p>
+          </div>
         </div>
       ),
     },
@@ -152,7 +151,7 @@ export default function PayrollPage() {
       key: "period",
       header: "Periode",
       render: (row) => (
-        <span className="text-sm whitespace-nowrap">
+        <span className="whitespace-nowrap">
           {MONTHS_ID[row.period_month - 1]} {row.period_year}
         </span>
       ),
@@ -179,7 +178,7 @@ export default function PayrollPage() {
       key: "net_salary",
       header: "Gaji Bersih",
       className: "text-right",
-      render: (row) => <span className="font-semibold tabular-nums">{rupiah(row.net_salary)}</span>,
+      render: (row) => <strong className="tabular-nums">{rupiah(row.net_salary)}</strong>,
     },
     {
       key: "payment_date",
@@ -197,14 +196,14 @@ export default function PayrollPage() {
       render: (row) =>
         canDisburse && row.status !== "paid" ? (
           <Button
+            type="button"
             variant="outline"
-            size="sm"
             onClick={() => {
               setDisburseAccount("1120");
               setDisburseTarget(row);
             }}
           >
-            <Banknote /> Bayarkan
+            Bayarkan
           </Button>
         ) : null,
     },
@@ -213,15 +212,184 @@ export default function PayrollPage() {
   return (
     <div>
       <PageHeader
-        title="Payroll"
+        eyebrow="SUMBER DAYA MANUSIA"
+        title="Payroll & slip gaji"
         description="Slip gaji bulanan karyawan. Generate slip oleh Accounting/Direktur; pembayaran (disburse) oleh Kasir/Direktur dan otomatis memposting jurnal beban gaji."
       >
         {canGenerate ? (
-          <Button size="sm" onClick={() => setGenerateOpen(true)}>
-            <Play /> Generate Slip Gaji
+          <Button type="button" onClick={() => setGenerateOpen((v) => !v)}>
+            {generateOpen ? "Tutup Form" : "+ Generate Slip Gaji"}
           </Button>
         ) : null}
       </PageHeader>
+
+      <nav className="tabs" aria-label="Tampilan halaman">
+        {visibleTabs.map((tab) => (
+          <Link
+            key={tab.href}
+            href={tab.href}
+            aria-current={tab.href === "/hr/payroll" ? "page" : undefined}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </nav>
+
+      {generateOpen && canGenerate ? (
+        <form onSubmit={handleGenerate} className="panel formgrid mb-4">
+          <div className="panelhead wide">
+            <div>
+              <h2>Generate slip gaji</h2>
+              <p>
+                Gaji pokok dan tunjangan standar diambil dari master karyawan. Bila slip periode yang sama
+                sudah ada dan belum dibayar, nilainya akan diperbarui.
+              </p>
+            </div>
+          </div>
+
+          <label className="wide" htmlFor="pay-employee">
+            Karyawan *
+            <select
+              id="pay-employee"
+              required
+              value={genForm.employee}
+              onChange={(e) => setGenForm((p) => ({ ...p, employee: e.target.value }))}
+            >
+              <option value="">— pilih karyawan aktif —</option>
+              {employees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.employee_id} · {employee.full_name} · {rupiah(employee.base_salary)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="pay-month">
+            Bulan periode *
+            <select
+              id="pay-month"
+              required
+              value={genForm.period_month}
+              onChange={(e) => setGenForm((p) => ({ ...p, period_month: e.target.value }))}
+            >
+              {MONTHS_ID.map((month, index) => (
+                <option key={month} value={index + 1}>
+                  {month}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="pay-year">
+            Tahun periode *
+            <Input
+              id="pay-year"
+              type="number"
+              min="2001"
+              required
+              value={genForm.period_year}
+              onChange={(e) => setGenForm((p) => ({ ...p, period_year: e.target.value }))}
+            />
+          </label>
+
+          <label htmlFor="pay-overtime">
+            Tunjangan lembur
+            <Input
+              id="pay-overtime"
+              type="number"
+              min="0"
+              step="0.01"
+              value={genForm.overtime_allowance}
+              onChange={(e) => setGenForm((p) => ({ ...p, overtime_allowance: e.target.value }))}
+            />
+          </label>
+
+          <label htmlFor="pay-bonus">
+            Bonus
+            <Input
+              id="pay-bonus"
+              type="number"
+              min="0"
+              step="0.01"
+              value={genForm.bonus_allowance}
+              onChange={(e) => setGenForm((p) => ({ ...p, bonus_allowance: e.target.value }))}
+            />
+          </label>
+
+          <label htmlFor="pay-deductions">
+            Potongan
+            <Input
+              id="pay-deductions"
+              type="number"
+              min="0"
+              step="0.01"
+              value={genForm.deductions}
+              onChange={(e) => setGenForm((p) => ({ ...p, deductions: e.target.value }))}
+            />
+          </label>
+
+          <label className="wide" htmlFor="pay-notes">
+            Catatan
+            <Textarea
+              id="pay-notes"
+              rows={2}
+              value={genForm.notes}
+              onChange={(e) => setGenForm((p) => ({ ...p, notes: e.target.value }))}
+            />
+          </label>
+
+          <div className="form-actions wide">
+            <Button type="button" variant="outline" onClick={() => setGenerateOpen(false)} disabled={saving}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={saving || genForm.employee === ""}>
+              {saving ? <Loader2 className="animate-spin" /> : null}
+              Generate Slip
+            </Button>
+          </div>
+        </form>
+      ) : null}
+
+      {disburseTarget && canDisburse ? (
+        <form onSubmit={handleDisburse} className="panel formgrid mb-4">
+          <div className="panelhead wide">
+            <div>
+              <h2>Bayarkan gaji — {disburseTarget.slip_number}</h2>
+              <p>
+                Gaji bersih <strong>{rupiah(disburseTarget.net_salary)}</strong> untuk{" "}
+                {disburseTarget.employee_name} periode {MONTHS_ID[disburseTarget.period_month - 1]}{" "}
+                {disburseTarget.period_year} akan dibayarkan dan jurnal beban gaji diposting otomatis.
+              </p>
+            </div>
+          </div>
+
+          <label className="wide" htmlFor="disburse-account">
+            Akun kas / bank pembayaran *
+            <select
+              id="disburse-account"
+              value={disburseAccount}
+              onChange={(e) => setDisburseAccount(e.target.value)}
+            >
+              {accounts.map((acc) => (
+                <option key={acc.id} value={acc.code}>
+                  {acc.code} · {acc.name}
+                </option>
+              ))}
+              {accounts.length === 0 ? <option value="1120">1120 · Bank BCA (default)</option> : null}
+            </select>
+          </label>
+
+          <div className="form-actions wide">
+            <Button type="button" variant="outline" onClick={() => setDisburseTarget(null)} disabled={saving}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={saving || disburseAccount === ""}>
+              {saving ? <Loader2 className="animate-spin" /> : null}
+              Bayarkan Gaji
+            </Button>
+          </div>
+        </form>
+      ) : null}
 
       <DataTable
         columns={columns}
@@ -237,166 +405,6 @@ export default function PayrollPage() {
         total={data?.count}
         onPageChange={setPage}
       />
-
-      <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
-        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Generate Slip Gaji</DialogTitle>
-            <DialogDescription>
-              Gaji pokok dan tunjangan standar diambil dari master karyawan. Bila slip periode yang sama
-              sudah ada dan belum dibayar, nilainya akan diperbarui.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleGenerate} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="pay-employee">Karyawan *</Label>
-              <select
-                id="pay-employee"
-                required
-                value={genForm.employee}
-                onChange={(e) => setGenForm((p) => ({ ...p, employee: e.target.value }))}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              >
-                <option value="">— pilih karyawan aktif —</option>
-                {employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.employee_id} · {employee.full_name} · {rupiah(employee.base_salary)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="pay-month">Bulan Periode *</Label>
-                <select
-                  id="pay-month"
-                  required
-                  value={genForm.period_month}
-                  onChange={(e) => setGenForm((p) => ({ ...p, period_month: e.target.value }))}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  {MONTHS_ID.map((month, index) => (
-                    <option key={month} value={index + 1}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="pay-year">Tahun Periode *</Label>
-                <Input
-                  id="pay-year"
-                  type="number"
-                  min="2001"
-                  required
-                  value={genForm.period_year}
-                  onChange={(e) => setGenForm((p) => ({ ...p, period_year: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="pay-overtime">Tunjangan Lembur</Label>
-                <Input
-                  id="pay-overtime"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={genForm.overtime_allowance}
-                  onChange={(e) => setGenForm((p) => ({ ...p, overtime_allowance: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="pay-bonus">Bonus</Label>
-                <Input
-                  id="pay-bonus"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={genForm.bonus_allowance}
-                  onChange={(e) => setGenForm((p) => ({ ...p, bonus_allowance: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="pay-deductions">Potongan</Label>
-                <Input
-                  id="pay-deductions"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={genForm.deductions}
-                  onChange={(e) => setGenForm((p) => ({ ...p, deductions: e.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="pay-notes">Catatan</Label>
-              <Textarea
-                id="pay-notes"
-                rows={2}
-                value={genForm.notes}
-                onChange={(e) => setGenForm((p) => ({ ...p, notes: e.target.value }))}
-              />
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setGenerateOpen(false)} disabled={saving}>
-                Batal
-              </Button>
-              <Button type="submit" disabled={saving || genForm.employee === ""}>
-                {saving ? <Loader2 className="animate-spin" /> : null}
-                Generate Slip
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={disburseTarget !== null} onOpenChange={(open) => !open && setDisburseTarget(null)}>
-        <DialogContent className="max-w-md">
-          {disburseTarget ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>Bayarkan Gaji</DialogTitle>
-                <DialogDescription>
-                  Gaji bersih <span className="font-semibold text-foreground">{rupiah(disburseTarget.net_salary)}</span>{" "}
-                  untuk {disburseTarget.employee_name} periode{" "}
-                  {MONTHS_ID[disburseTarget.period_month - 1]} {disburseTarget.period_year} akan dibayarkan dan
-                  jurnal beban gaji diposting otomatis.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="disburse-account">Akun Kas / Bank Pembayaran *</Label>
-                <select
-                  id="disburse-account"
-                  value={disburseAccount}
-                  onChange={(e) => setDisburseAccount(e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  {accounts.map((acc) => (
-                    <option key={acc.id} value={acc.code}>
-                      {acc.code} · {acc.name}
-                    </option>
-                  ))}
-                  {accounts.length === 0 ? <option value="1120">1120 · Bank BCA (default)</option> : null}
-                </select>
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDisburseTarget(null)} disabled={saving}>
-                  Batal
-                </Button>
-                <Button onClick={handleDisburse} disabled={saving || disburseAccount === ""}>
-                  {saving ? <Loader2 className="animate-spin" /> : <Banknote />}
-                  Bayarkan Gaji
-                </Button>
-              </DialogFooter>
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
