@@ -229,8 +229,10 @@ export interface AccountingPeriod {
   status: PeriodStatus;
   is_closed: boolean;
   closed_by: number | null;
+  closed_by_name: string;
   closed_at: string | null;
   reopened_by: number | null;
+  reopened_by_name: string;
   reopened_at: string | null;
   reopen_reason: string;
   created_at: string;
@@ -458,6 +460,7 @@ export interface AnnualReport {
     net_profit_margin_pct: number;
   };
   monthly_breakdown: SalesTrendPoint[];
+  top_products?: ProductSalesRow[];
 }
 
 // ---------------------------------------------------------------------------

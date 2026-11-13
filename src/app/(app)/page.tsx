@@ -161,7 +161,7 @@ export default function DashboardPage() {
             <CardTitle className="flex items-center gap-2">
               <Boxes className="size-5 text-primary" />
               Estimasi Seluruh Produk
-            </CardHeader>
+            </CardTitle>
             <CardDescription>Ringkasan stok, konsumsi harian, dan kelas ABC</CardDescription>
           </CardHeader>
           <CardContent>

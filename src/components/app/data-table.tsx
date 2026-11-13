@@ -160,9 +160,9 @@ function extractText(node: React.ReactNode): string {
   if (node === null || node === undefined || typeof node === "boolean") return "";
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(extractText).join(" ");
-  if (typeof node === "object" && "props" in (node as Record<string, unknown>)) {
-    const props = (node as { props?: { children?: React.ReactNode } }).props;
-    return extractText(props?.children);
+  const element = node as unknown as { props?: { children?: React.ReactNode } };
+  if (typeof element === "object" && element !== null && "props" in element) {
+    return extractText(element.props?.children);
   }
   return "";
 }

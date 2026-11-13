@@ -104,6 +104,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (raw) {
         const parsed = JSON.parse(raw) as AuthSession;
         if (parsed && parsed.token && parsed.role) {
+          // Restorasi sesi dari localStorage setelah mount (hindari mismatch SSR).
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setSession(parsed);
         }
       }

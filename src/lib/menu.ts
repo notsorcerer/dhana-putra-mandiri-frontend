@@ -17,7 +17,6 @@ import {
   LayoutDashboard,
   LineChart,
   Package,
-  PieChart,
   Receipt,
   ScrollText,
   Truck,
@@ -156,25 +155,25 @@ export const MENU: MenuSection[] = [
         href: "/hr/employees",
         label: "Karyawan",
         icon: Users,
-        roles: ["direktur", "accounting", "stakeholder"],
+        roles: ["direktur", "accounting"],
       },
       {
         href: "/hr/mutations",
         label: "Mutasi Karyawan",
         icon: UsersRound,
-        roles: ["direktur", "accounting", "stakeholder"],
+        roles: ["direktur", "accounting"],
       },
       {
         href: "/hr/labor-records",
         label: "Catatan Kerja",
         icon: ClipboardList,
-        roles: ["direktur", "accounting", "stakeholder"],
+        roles: ["direktur", "accounting"],
       },
       {
         href: "/hr/payroll",
         label: "Payroll",
         icon: FileText,
-        roles: ["direktur", "kasir", "accounting", "stakeholder"],
+        roles: ["direktur", "admin", "kasir", "accounting"],
       },
     ],
   },
@@ -203,9 +202,10 @@ export const CAN = {
   createDebitNote: ["direktur", "accounting"] as Role[],
   manageCoa: ["direktur", "accounting"] as Role[],
   managePeriods: ["direktur", "accounting"] as Role[],
-  manageHr: ["direktur", "accounting"] as Role[], // karyawan, mutasi, catatan kerja
+  manageEmployees: ["direktur", "accounting"] as Role[], // karyawan (master data SDM)
+  manageHr: ["direktur", "accounting"] as Role[], // mutasi & catatan kerja
   generatePayroll: ["direktur", "accounting"] as Role[],
-  disbursePayroll: ["direktur", "kasir", "accounting"] as Role[],
+  disbursePayroll: ["direktur", "admin", "kasir"] as Role[],
   viewFinancialValues: ["direktur", "admin", "accounting", "kasir", "stakeholder"] as Role[],
 } as const;
 

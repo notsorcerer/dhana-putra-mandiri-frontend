@@ -67,6 +67,8 @@ export function ProductFormDialog({ open, onOpenChange, product, onSaved }: Prod
 
   useEffect(() => {
     if (open) {
+      // Isi ulang form dari data produk terpilih saat dialog dibuka.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setValues(
         product
           ? {

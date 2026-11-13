@@ -41,7 +41,7 @@ export function SalesTrendChart({ trends }: { trends: SalesTrendPoint[] }) {
               <XAxis dataKey="bulan" tick={{ fontSize: 12 }} />
               <YAxis tickFormatter={(v: number) => rupiahCompact(v)} tick={{ fontSize: 11 }} width={72} />
               <Tooltip
-                formatter={(value: number | string) => rupiah(Number(value))}
+                formatter={(value) => rupiah(Number(value ?? 0))}
                 contentStyle={{ borderRadius: 8, fontSize: 12 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -100,10 +100,13 @@ export function DistributionPieChart({ title, description, data }: PieChartCardP
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number | string, name: string) => [
-                  `${Number(value).toLocaleString("id-ID", { maximumFractionDigits: 2 })}% · ${data.find((d) => d.label === name)?.stock_qty ?? 0} unit`,
-                  name,
-                ]}
+                formatter={(value, name) => {
+                  const label = String(name ?? "");
+                  return [
+                    `${Number(value ?? 0).toLocaleString("id-ID", { maximumFractionDigits: 2 })}% · ${data.find((d) => d.label === label)?.stock_qty ?? 0} unit`,
+                    label,
+                  ];
+                }}
                 contentStyle={{ borderRadius: 8, fontSize: 12 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />

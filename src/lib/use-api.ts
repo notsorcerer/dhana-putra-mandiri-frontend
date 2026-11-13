@@ -24,6 +24,8 @@ export function useApi<T>(path: string | null): ApiState<T> {
 
   useEffect(() => {
     if (path === null) {
+      // Reset state saat path dinonaktifkan.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setData(null);
       setLoading(false);
       setError(null);
