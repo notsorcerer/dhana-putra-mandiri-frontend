@@ -1,13 +1,17 @@
 /**
  * Klien REST API untuk backend CV Dhana Putra Mandiri (Django + DRF).
  *
- * - Token Bearer demo disimpan di localStorage (kunci "dpm_auth").
+ * - Semua request lewat BFF same-origin `/api/backend/*` (Route Handler Next.js)
+ *   yang menyisipkan access token OAuth 2.0 dari cookie HttpOnly di sisi server.
+ *   Browser tidak pernah memegang token (tanpa localStorage).
+ * - Request yang mengubah data membawa header CSRF `x-dpm-csrf: 1`.
  * - Respons desimal dikembalikan backend sebagai string; gunakan helper num()
  *   dari lib/format untuk mengonversinya di UI.
- * - Respons 401 otomatis menghapus sesi dan mengarahkan ke halaman login.
+ * - Respons 401 (sesi berakhir) mengarahkan ke halaman login dengan returnTo.
  */
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api").replace(/\/+$/, "");
+const API_BASE = "/api/backend";
+export const CSRF_HEADER_NAME = "x-dpm-csrf";
 
 export class ApiError extends Error {
   status: number;
@@ -30,7 +34,8 @@ export interface RequestOptions {
 }
 
 function buildUrl(path: string, params?: QueryParams): string {
-  const url = new URL(`${API_BASE}${path.startsWith("/") ? path : `/${path}`}`);
+  const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+  const url = new URL(`${API_BASE}${path.startsWith("/") ? path : `/${path}`}`, origin);
   if (params) {
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined && value !== null && value !== "") {
@@ -39,18 +44,6 @@ function buildUrl(path: string, params?: QueryParams): string {
     }
   }
   return url.toString();
-}
-
-export function getStoredToken(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem("dpm_auth");
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { token?: string };
-    return typeof parsed.token === "string" ? parsed.token : null;
-  } catch {
-    return null;
-  }
 }
 
 function extractApiMessage(data: unknown, status: number): string {
@@ -93,10 +86,9 @@ function extractApiMessage(data: unknown, status: number): string {
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, params } = options;
-  const headers: Record<string, string> = {};
-  const token = getStoredToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (method !== "GET") {
+    headers[CSRF_HEADER_NAME] = "1";
   }
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -109,10 +101,11 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       cache: "no-store",
+      credentials: "same-origin",
     });
   } catch {
     throw new ApiError(
-      "Tidak dapat terhubung ke server backend. Pastikan backend berjalan (default: http://localhost:8000).",
+      "Tidak dapat terhubung ke server aplikasi. Periksa koneksi Anda.",
       0,
       null,
     );
@@ -130,11 +123,11 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 
   if (!response.ok) {
     if (response.status === 401 && typeof window !== "undefined") {
-      window.localStorage.removeItem("dpm_auth");
       if (!window.location.pathname.startsWith("/login")) {
-        // Redirect penuh diperlukan karena terjadi di luar siklus React (401).
+        // Sesi OAuth berakhir/dicabut: redirect penuh ke login (di luar siklus React).
+        const returnTo = `${window.location.pathname}${window.location.search}`;
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = "/login";
+        window.location.href = `/login?returnTo=${encodeURIComponent(returnTo)}&error=session_expired`;
       }
     }
     throw new ApiError(extractApiMessage(data, response.status), response.status, data);

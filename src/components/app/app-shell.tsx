@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { SvgIcon } from "@/components/app/svg-sprites";
 import { cn } from "@/lib/utils";
 import { useAuth, type Role } from "@/lib/auth";
@@ -39,7 +39,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith("/chart-of-accounts")) return "Bagan akun";
   if (pathname.startsWith("/accounting-periods")) return "Rekonsiliasi dan tutup buku";
   if (pathname.startsWith("/reports/balance-sheet")) return "Piutang dan neraca";
-  if (pathname.startsWith("/reports/sales-trends")) return "Laporan laba rugi & tren";
+  if (pathname.startsWith("/reports/sales-trends")) return "Tren penjualan";
   if (pathname.startsWith("/reports/product-sales")) return "Penjualan per produk";
   if (pathname.startsWith("/reports/annual")) return "Perbandingan tahunan";
   if (pathname.startsWith("/reports/pie-charts")) return "Distribusi nilai";
@@ -58,13 +58,10 @@ function pageTitle(pathname: string): string {
 }
 
 const PROFILE_META: Record<Role, { name: string; roleLabel: string; initial: string }> = {
-  direktur: { name: "Pemilik", roleLabel: "Pemilik", initial: "P" },
+  direktur: { name: "Direktur", roleLabel: "Direktur", initial: "D" },
   admin: { name: "Admin", roleLabel: "Admin", initial: "A" },
-  sales: { name: "Penjualan", roleLabel: "Penjualan", initial: "P" },
   gudang: { name: "Gudang", roleLabel: "Gudang", initial: "G" },
-  kasir: { name: "Keuangan", roleLabel: "Keuangan", initial: "K" },
-  accounting: { name: "Akuntansi", roleLabel: "Keuangan", initial: "A" },
-  stakeholder: { name: "Pemangku", roleLabel: "Pemilik", initial: "P" },
+  stakeholder: { name: "Stakeholder", roleLabel: "Stakeholder", initial: "S" },
 };
 
 function Brand() {
@@ -91,7 +88,6 @@ const TODAY = new Intl.DateTimeFormat("id-ID", {
 /** Kerangka aplikasi: aside#sidebar, button.scrim, dan div.shell (paritas dengan templates/base.html). */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const { session, logout } = useAuth();
   const [open, setOpen] = useState(false);
 
@@ -104,8 +100,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     setOpen(false);
-    logout();
-    router.replace("/login");
+    // Logout OIDC: hapus sesi cookie + RP-initiated logout di Keycloak.
+    void logout();
   };
 
   const sections = session ? menuForRole(session.role) : [];

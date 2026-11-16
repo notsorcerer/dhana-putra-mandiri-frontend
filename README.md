@@ -5,7 +5,7 @@ Frontend ini **terpisah dari backend** dan mengonsumsi REST API Django REST Fram
 pada repo [`dhana-putra-mandiri-backend`](https://github.com/adamleonn/dhana-putra-mandiri-backend).
 
 Seluruh antarmuka menggunakan **Bahasa Indonesia**, format **Rupiah (id-ID)**, dan menu/aksi
-dibatasi mengikuti matriks RBAC backend (peran demo).
+dibatasi mengikuti matriks RBAC backend. Login memakai **OAuth 2.0 Authorization Code + PKCE / OpenID Connect (Keycloak)**.
 
 ---
 
@@ -27,7 +27,8 @@ dibatasi mengikuti matriks RBAC backend (peran demo).
 
 - **Node.js 20+** dan npm
 - **Python 3.11+** (untuk backend)
-- Backend ERP berjalan lokal di `http://localhost:8000`
+- Backend ERP berjalan lokal di `http://127.0.0.1:8001`
+- Keycloak lokal di `http://localhost:8080` (realm `dhana-putra`)
 
 ---
 
@@ -54,8 +55,9 @@ python manage.py seed_demo_data
 python manage.py runserver 127.0.0.1:8000
 ```
 
-Backend menyediakan token demo Bearer (aktif saat `DEMO_MODE=True`) dan mengizinkan
-CORS dari `http://localhost:3000`.
+Setup Keycloak, realm, client, redirect URI, dan migrasi pengguna: lihat
+`backend/docs/oauth2-keycloak-setup.md`. Jalankan backend di port 8001:
+`python manage.py runserver 127.0.0.1:8001`.
 
 > Catatan: frontend ini **tidak** mengubah kode backend. Semua temuan bug/keterbatasan
 > didokumentasikan di bagian [Catatan Integrasi](#catatan-integrasi-penting).
@@ -69,9 +71,8 @@ git clone <url-repo-frontend>
 cd dhana-putra-mandiri-frontend
 
 npm install
-cp .env.local.example .env.local
-# sesuaikan bila backend bukan di localhost:8000
-# NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+cp .env.example .env.local
+# isi OIDC_CLIENT_SECRET (dari Keycloak) dan SESSION_SECRET (>=32 karakter acak)
 
 npm run dev
 ```
@@ -87,20 +88,26 @@ npm run start
 
 ---
 
-## 3. Login Demo & Peran
+## 3. Login OAuth 2.0 / OpenID Connect
 
-Halaman login menyediakan **pemilih peran demo** (tanpa kata sandi). Frontend menyimpan
-token Bearer di `localStorage` (`dpm_auth`) dan mengirimnya pada setiap request.
+Tombol **Masuk dengan SSO** memulai Authorization Code Flow + PKCE (S256) melalui
+Route Handler server (BFF):
 
-| Peran | Token demo | Fokus akses |
-| --- | --- | --- |
-| Direktur | `demo-direktur` | Semua modul & aksi |
-| Admin | `demo-admin` | Faktur + item, pembayaran, lihat GR/DN/COA/payroll |
-| Sales | `demo-sales` | Faktur penjualan + item (tanpa HPP) |
-| Gudang | `demo-gudang` | Penerimaan barang, surat jalan + konfirmasi |
-| Kasir (Finance) | `demo-kasir` | Pembayaran (BKM/BKK), lihat faktur/GR/DN/COA/payroll |
-| Accounting | `demo-accounting` | Debit note, buku besar, COA, periode, payroll, SDM |
-| Stakeholder | `demo-stakeholder` | Baca laporan & master (tanpa pembayaran/SDM) |
+| Route | Fungsi |
+| --- | --- |
+| `GET /api/auth/login?returnTo=` | Buat `state`, `nonce`, `code_verifier` (cookie HttpOnly terenkripsi) → redirect ke Keycloak |
+| `GET /api/auth/callback` | Validasi `state`, tukar code + verifier, verifikasi ID token (signature JWKS, iss, aud, nonce, exp), buat sesi |
+| `GET /api/auth/session` | Pemulihan sesi (profil + peran, tanpa token); refresh access token otomatis |
+| `POST /api/auth/logout` | Hapus sesi, cabut refresh token, RP-initiated logout Keycloak |
+| `/api/backend/*` | Proxy ke Django dengan `Authorization: Bearer` disisipkan di server |
+
+Token **tidak pernah** disimpan di `localStorage`; sesi berada di cookie `HttpOnly`,
+`SameSite=Lax`, `Secure` + prefiks `__Host-` saat HTTPS, terenkripsi AES-256-GCM.
+Mutasi data wajib `Origin` same-origin + header `x-dpm-csrf: 1`. `src/proxy.ts`
+mengalihkan halaman tanpa sesi ke `/login?returnTo=...`.
+
+Peran (`direktur`, `admin`, `gudang`, `stakeholder`) berasal dari client role Keycloak
+`dhana-putra-api`. Akun tanpa peran diarahkan ke `/login?error=no_role`.
 
 Menu sidebar dan tombol aksi disembunyikan sesuai peran. **Otorisasi sesungguhnya tetap
 ditegakkan backend** — frontend hanya menyembunyikan elemen yang tidak berhak.
@@ -129,7 +136,7 @@ ditegakkan backend** — frontend hanya menyembunyikan elemen yang tidak berhak.
 
 ### Laporan
 - **Neraca** — per `as_of_date`
-- **Tren Penjualan 12 Bulan** — grafik garis + tabel bulanan per `year`
+- **Tren Penjualan 12 Bulan** — grafik bulanan dan kuartalan, pie chart nilai penjualan per merek dan ukuran kemasan, serta tabel bulanan per `year`
 - **Penjualan & Margin Produk** — peringkat SKU per `year`
 - **Ringkasan Keuangan Tahunan** — laba rugi ringkas, rincian bulanan, 5 produk teratas
 - **Distribusi Persediaan** — pie chart per merek & ukuran kemasan
@@ -149,20 +156,21 @@ estimasi stok, dan pintasan modul sesuai hak akses.
 
 ## 5. Matriks Akses (ringkas)
 
-| Aksi | Direktur | Admin | Sales | Gudang | Kasir | Accounting | Stakeholder |
-| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| Produk (ubah) | ✓ | – | – | – | – | – | – |
-| GR / Surat Jalan (buat, konfirmasi) | ✓ | – | – | ✓ | – | – | – |
-| Faktur Penjualan (buat) | ✓ | ✓ | ✓ | – | – | – | – |
-| Pembayaran (buat) | ✓ | ✓ | – | – | ✓ | – | – |
-| Debit Note (buat) | ✓ | – | – | – | – | ✓ | – |
-| Buku Besar | ✓ | – | – | – | ✓ | ✓ | – |
-| COA (tambah) | ✓ | – | – | – | – | ✓ | – |
-| Periode Akuntansi | ✓ | – | – | – | – | ✓ | – |
-| Karyawan / Mutasi / Catatan Kerja | ✓ | – | – | – | – | ✓ | – |
-| Payroll (generate) | ✓ | – | – | – | – | ✓ | – |
-| Payroll (disburse) | ✓ | ✓ | – | – | ✓ | – | – |
-| Laporan | ✓ | ✓ | – | – | ✓ | ✓ | ✓ |
+| Aksi | Direktur | Admin | Gudang | Stakeholder |
+| --- | :-: | :-: | :-: | :-: |
+| Produk (ubah) | ✓ | – | – | – |
+| Penerimaan (buat draf) | ✓ | ✓ | – | – |
+| Penerimaan (konfirmasi) | ✓ | – | ✓ | – |
+| Faktur Penjualan (buat) | ✓ | ✓ | – | – |
+| Pembayaran (buat) | ✓ | ✓ | – | – |
+| Debit Note (buat) | ✓ | – | – | – |
+| Buku Besar | ✓ | – | – | – |
+| COA (tambah) | ✓ | – | – | – |
+| Periode Akuntansi | ✓ | – | – | – |
+| Karyawan / Mutasi / Catatan Kerja | ✓ | – | – | – |
+| Payroll (generate) | ✓ | – | – | – |
+| Payroll (disburse) | ✓ | ✓ | – | – |
+| Laporan | ✓ | ✓ | – | ✓ |
 
 Matriks ini diturunkan dari permission group backend dan **diverifikasi langsung** terhadap
 API (termasuk 403 untuk peran yang tidak berhak).
