@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import { rupiah } from "@/lib/format";
-import type { PieSlice, SalesTrendPoint } from "@/types/api";
+import { pct, rupiah } from "@/lib/format";
+import type { PieSlice, SalesTrendPoint, SalesTrendsReport } from "@/types/api";
 
 /** Palet grafik prototipe lama (biru penjualan, teal HPP). */
 const PIE_COLORS = [
@@ -23,6 +23,69 @@ const compactFmt = new Intl.NumberFormat("id-ID", {
   maximumFractionDigits: 1,
 });
 
+type SalesSlice = { label: string; value: number };
+
+function groupSales(rows: SalesTrendsReport["sales_mix"], field: "brand" | "package_size"): SalesSlice[] {
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    const label = row[field]?.trim() || "Belum tercatat";
+    totals.set(label, (totals.get(label) ?? 0) + Number(row.revenue));
+  }
+  return Array.from(totals, ([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, "id"));
+}
+
+function SalesPie({ title, rows, children }: {
+  title: string; rows: SalesSlice[]; children?: React.ReactNode;
+}) {
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  return (
+    <section className="panel min-w-0">
+      <div className="panelhead"><h2>{title}</h2>{children}</div>
+      <div className="grid items-center gap-3 px-4 pb-4 sm:grid-cols-[150px_minmax(0,1fr)]">
+        <div className="h-40 min-w-0" aria-hidden="true">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={rows} dataKey="value" nameKey="label" outerRadius="90%" isAnimationActive={false}>
+                {rows.map((row, i) => <Cell key={row.label} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+              </Pie>
+              <Tooltip formatter={(value) => rupiah(value)} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <ul className="min-w-0 space-y-2">
+          {rows.map((row, i) => (
+            <li key={row.label} className="grid grid-cols-[10px_minmax(0,1fr)_auto] items-baseline gap-x-2 border-b py-2">
+              <span className="size-2 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+              <strong className="break-words">{row.label}</strong>
+              <span className="tabular-nums">{pct(100 * row.value / total)}</span>
+              <span className="col-start-2 col-span-2 text-sm tabular-nums">{rupiah(row.value)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+export function SalesMixCharts({ rows, year }: { rows: SalesTrendsReport["sales_mix"]; year: number }) {
+  const [brand, setBrand] = useState("");
+  const brands = groupSales(rows, "brand");
+  const selected = brand ? rows.filter((row) => (row.brand?.trim() || "Belum tercatat") === brand) : rows;
+  if (!brands.length) return <p className="panel pad">Belum ada nilai penjualan per produk untuk tahun {year}.</p>;
+  return (
+    <div className="grid gap-4 xl:grid-cols-2">
+      <SalesPie title="Penjualan per merek" rows={brands} />
+      <SalesPie title="Penjualan per ukuran kemasan" rows={groupSales(selected, "package_size")}>
+        <select aria-label="Merek untuk rincian ukuran" value={brand} onChange={(e) => setBrand(e.target.value)}>
+          <option value="">Semua merek</option>
+          {brands.map((row) => <option key={row.label}>{row.label}</option>)}
+        </select>
+      </SalesPie>
+    </div>
+  );
+}
+
 interface ChartPoint {
   label: string;
   sales: number;
@@ -35,7 +98,7 @@ interface ChartPoint {
  * titik lingkaran putih r=3, pemilih mode #chart-mode, dan output.chart-tip).
  */
 export function SalesTrendChart({ trends }: { trends: SalesTrendPoint[] }) {
-  const [mode, setMode] = useState<"day" | "week">("day");
+  const [mode, setMode] = useState<"month" | "quarter">("month");
   const [width, setWidth] = useState(560);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
@@ -58,7 +121,7 @@ export function SalesTrendChart({ trends }: { trends: SalesTrendPoint[] }) {
       sales: t.total_sales,
       cost: t.total_cogs,
     }));
-    if (mode === "day" || raw.length <= 3) return raw;
+    if (mode === "month" || raw.length <= 3) return raw;
     // Agregasi per kuartal/kelompok saat mode kedua dipilih
     const grouped: ChartPoint[] = [];
     for (let i = 0; i < raw.length; i += 3) {
@@ -131,12 +194,12 @@ export function SalesTrendChart({ trends }: { trends: SalesTrendPoint[] }) {
             id="chart-mode"
             value={mode}
             onChange={(e) => {
-              setMode(e.target.value as "day" | "week");
+              setMode(e.target.value as "month" | "quarter");
               setActiveIdx(null);
             }}
           >
-            <option value="day">Harian</option>
-            <option value="week">Mingguan</option>
+            <option value="month">Bulanan</option>
+            <option value="quarter">Kuartalan</option>
           </select>
         </label>
       </div>

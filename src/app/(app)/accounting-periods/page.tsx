@@ -116,13 +116,6 @@ export default function AccountingPeriodsPage() {
           {reconItems.map((item) => (
             <label key={item.label}>
               {item.label} · buku {rupiah(item.value)}
-              {role === "accounting" && activePeriod.status === "OPEN" ? (
-                <input
-                  type="number"
-                  defaultValue={Math.round(item.value)}
-                  placeholder="Saldo hasil pemeriksaan"
-                />
-              ) : null}
             </label>
           ))}
 

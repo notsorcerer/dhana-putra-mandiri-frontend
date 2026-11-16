@@ -17,10 +17,9 @@ export default function DebitNotesPage() {
   const { session } = useAuth();
   const canCreate = can(CAN.createDebitNote, session?.role);
   const canApprove =
-    session?.role === "direktur" || session?.role === "accounting";
+    session?.role === "direktur";
   const canApply =
     session?.role === "direktur" ||
-    session?.role === "kasir" ||
     session?.role === "admin";
   const { data, loading, error, page, setPage, totalPages, reload } =
     usePaginated<DebitNote>("/finance/debit-notes/");

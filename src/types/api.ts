@@ -484,6 +484,7 @@ export interface SalesTrendPoint {
 export interface SalesTrendsReport {
   year: number;
   trends: SalesTrendPoint[];
+  sales_mix: { brand: string; package_size: string; revenue: number }[];
 }
 
 export interface PieSlice {

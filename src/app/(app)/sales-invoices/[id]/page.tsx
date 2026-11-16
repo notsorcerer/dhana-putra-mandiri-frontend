@@ -12,7 +12,7 @@ import { CAN, can } from "@/lib/menu";
 import { useApi } from "@/lib/use-api";
 import type { Payment, SalesInvoice } from "@/types/api";
 
-const PAYMENT_VIEWER_ROLES = ["direktur", "admin", "kasir", "accounting"];
+const PAYMENT_VIEWER_ROLES = ["direktur", "admin"];
 
 /**
  * Halaman Detail Faktur Penjualan:

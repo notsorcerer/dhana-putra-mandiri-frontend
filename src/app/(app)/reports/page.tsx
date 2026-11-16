@@ -15,7 +15,7 @@ const REPORTS: {
     href: "/reports/sales-trends",
     code: "RPT-01",
     title: "Tren Penjualan 12 Bulan",
-    description: "Pendapatan, volume, HPP, dan laba kotor bulanan untuk satu tahun terpilih.",
+    description: "Tren bulanan dan kontribusi nilai penjualan per merek dan ukuran kemasan.",
     roles: CAN.viewSalesReports,
   },
   {

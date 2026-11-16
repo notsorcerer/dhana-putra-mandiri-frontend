@@ -8,9 +8,8 @@ import {
   type GrItemDraft,
   emptyGrItem,
 } from "@/components/app/items-editor";
-import { ApiError, fetchAllPages } from "@/lib/api";
+import { ApiError, apiPost, fetchAllPages } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { postDocumentWithItems } from "@/lib/doc-submit";
 import { suggestDocNumber, todayIso } from "@/lib/format";
 import { CAN, can } from "@/lib/menu";
 import type { GoodsReceipt, Product, Supplier } from "@/types/api";
@@ -93,19 +92,12 @@ export default function NewGoodsReceiptPage() {
         payload.unloading_cost = form.unloading_cost === "" ? "0.00" : form.unloading_cost;
       }
 
-      const { data, degraded } = await postDocumentWithItems<GoodsReceipt>(
+      const data = await apiPost<GoodsReceipt>(
         "/inventory/goods-receipts/",
         payload,
       );
 
-      if (degraded) {
-        toast.warning(
-          "Dokumen tersimpan sebagai draf tanpa item (keterbatasan backend saat menyimpan item sekaligus).",
-          { duration: 8000 },
-        );
-      } else {
-        toast.success(`Draf ${data.receipt_number} tersimpan.`);
-      }
+      toast.success(`Draf ${data.receipt_number} tersimpan.`);
       router.push(`/goods-receipts/${data.id}`);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Gagal menyimpan dokumen.";

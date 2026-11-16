@@ -9,7 +9,7 @@ import { CAN, can, type Role } from "@/lib/menu";
 
 /** Navigasi tab laporan keuangan & analitik (gaya `.tabs` prototipe). */
 const REPORT_TABS: { href: string; label: string; roles: readonly Role[] }[] = [
-  { href: "/reports/sales-trends", label: "Tren & laba kotor", roles: CAN.viewSalesReports },
+  { href: "/reports/sales-trends", label: "Tren penjualan", roles: CAN.viewSalesReports },
   { href: "/reports/balance-sheet", label: "Piutang & neraca", roles: CAN.viewFinanceReports },
   { href: "/reports/product-sales", label: "Per produk", roles: CAN.viewSalesReports },
   { href: "/reports/annual", label: "Perbandingan tahunan", roles: CAN.viewFinanceReports },
@@ -20,6 +20,9 @@ export default function ReportsLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const { session } = useAuth();
   const visibleTabs = REPORT_TABS.filter((tab) => can(tab.roles, session?.role));
+  if (REPORT_TABS.some((tab) => tab.href === pathname && !can(tab.roles, session?.role))) {
+    return <p className="panel pad">Peran Anda tidak memiliki akses ke laporan ini.</p>;
+  }
 
   return (
     <div>
@@ -30,7 +33,7 @@ export default function ReportsLayout({ children }: { children: React.ReactNode 
           <p>Tren omzet, neraca, kontribusi produk, perbandingan tahunan, dan distribusi persediaan.</p>
         </div>
         <div className="tools">
-          <PeriodFilter />
+          {pathname !== "/reports/sales-trends" && <PeriodFilter />}
           <Button type="button" variant="outline" onClick={() => window.print()}>
             Cetak / Ekspor
           </Button>

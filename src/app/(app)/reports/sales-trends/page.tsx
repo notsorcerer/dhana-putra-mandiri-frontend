@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SalesTrendChart } from "@/components/app/charts";
+import { SalesMixCharts, SalesTrendChart } from "@/components/app/charts";
 import { SvgIcon } from "@/components/app/svg-sprites";
 import { availableYears, num, pct, qty, rupiah } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
@@ -83,6 +83,7 @@ export default function SalesTrendsPage() {
             </article>
           </section>
 
+          <SalesMixCharts key={data.year} rows={data.sales_mix} year={data.year} />
           <SalesTrendChart trends={data.trends} />
 
           <section className="panel scroll">

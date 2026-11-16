@@ -47,7 +47,7 @@ export default function DashboardPage() {
 
   const balance = useApi<BalanceSheet>(showFinancial ? "/finance/reports/balance-sheet/" : null);
   const trends = useApi<SalesTrendsReport>(
-    role === "gudang" ? null : "/finance/reports/sales-trends/",
+    can(CAN.viewSalesReports, role) ? "/finance/reports/sales-trends/" : null,
   );
   const stock = useApi<StockEstimationRow[]>(
     role === null ? null : "/inventory/products/stock-estimation/",
@@ -159,15 +159,13 @@ export default function DashboardPage() {
       href: "/reports/balance-sheet",
     });
   }
-  if (role !== "sales") {
-    alerts.push({
-      icon: "box",
-      label: "Risiko kehabisan stok",
-      value: `${lowStock.length} produk`,
-      caption: "Stok di bawah estimasi aman",
-      href: "/products/abc-analysis",
-    });
-  }
+  alerts.push({
+    icon: "box",
+    label: "Risiko kehabisan stok",
+    value: `${lowStock.length} produk`,
+    caption: "Stok di bawah estimasi aman",
+    href: "/products/abc-analysis",
+  });
   alerts.push({
     icon: "truck",
     label: "Menunggu pengiriman",
@@ -178,12 +176,10 @@ export default function DashboardPage() {
 
   const prompt =
     role === "gudang"
-      ? { label: "Catat penerimaan", href: "/goods-receipts/new" }
-      : role === "kasir" || role === "accounting"
-        ? { label: "Catat mutasi", href: "/payments/new" }
-        : can(CAN.createInvoice, role)
-          ? { label: "Buat faktur", href: "/sales-invoices/new" }
-          : null;
+      ? { label: "Periksa penerimaan", href: "/goods-receipts" }
+      : can(CAN.createInvoice, role)
+        ? { label: "Buat faktur", href: "/sales-invoices/new" }
+        : null;
 
   const recentDocs =
     role === "gudang"
