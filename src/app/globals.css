@@ -751,13 +751,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding-bottom: 5px;
+    padding-bottom: 2px;
     border-radius: 12px;
     background: var(--ink);
     color: white;
-    font-size: 26px;
-    font-weight: 750;
-    letter-spacing: -0.1em;
+    font-size: 23px;
+    font-weight: 700;
+    letter-spacing: -0.06em;
     flex: none;
   }
 
@@ -767,12 +767,13 @@
 
   .brandwords {
     display: grid;
-    gap: 4px;
+    gap: 2px;
   }
 
   .brandwords b {
-    font-size: 18px;
-    letter-spacing: -0.045em;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
   }
 
   .brandwords > span {
@@ -821,7 +822,8 @@
     height: 18px;
   }
 
-  /* Tombol gaya lama untuk markup non-shadcn (pagination, login). */
+  /* Tombol gaya lama untuk markup non-shadcn (pagination, login, formgrid, table-tools). */
+  button:not([data-slot]):not([role="checkbox"]):not(.icon):not(.scrim):not(.doclink),
   .button,
   .outline,
   .secondary {
@@ -841,14 +843,36 @@
     transition: background-color 0.15s, border-color 0.15s;
   }
 
+  button:not([data-slot]):not([role="checkbox"]):not(.icon):not(.scrim):not(.doclink):not(.outline):not(.secondary),
   .button {
     background: var(--blue);
     color: white;
   }
 
+  button:not([data-slot]):not([role="checkbox"]):not(.icon):not(.scrim):not(.doclink):not(.outline):not(.secondary):hover,
   .button:hover {
     background: var(--blue-dark);
     text-decoration: none;
+  }
+
+  button:not([data-slot]):not([role="checkbox"]):not(.icon):not(.scrim):not(.doclink):disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+  button.doclink {
+    background: none;
+    border: 0;
+    padding: 0;
+    min-height: 0;
+    color: var(--blue);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  button.doclink:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   .outline,
@@ -1273,7 +1297,7 @@
   }
 
   .signin-header {
-    max-width: 1350px;
+    max-width: 1268px;
     margin: auto;
     display: flex;
     align-items: center;
@@ -1289,15 +1313,15 @@
     display: grid;
     grid-template-columns: 1.05fr 1fr;
     align-items: center;
-    gap: clamp(40px, 7vw, 100px);
+    gap: clamp(48px, 7vw, 88px);
     padding: 64px 0 95px;
   }
 
   .signin-intro h1 {
-    font-size: clamp(52px, 6vw, 84px);
-    font-weight: 600;
-    line-height: 1.02;
-    letter-spacing: -0.075em;
+    font-size: clamp(48px, 5.2vw, 68px);
+    font-weight: 650;
+    line-height: 1.05;
+    letter-spacing: -0.055em;
     margin: 0 0 22px;
   }
 
@@ -1309,6 +1333,7 @@
   .signin-form p {
     color: var(--muted-legacy);
     font-size: 16px;
+    line-height: 1.45;
     max-width: 38ch;
     margin-bottom: 0;
   }
@@ -1317,13 +1342,13 @@
     background: white;
     border: 1px solid #d5dfed;
     border-radius: 16px;
-    padding: clamp(22px, 3vw, 34px);
-    box-shadow: 0 14px 35px #25487909;
+    padding: 30px 32px;
+    box-shadow: 0 14px 35px #2548790f;
   }
 
   .signin-form form {
     display: grid;
-    gap: 22px;
+    gap: 20px;
   }
 
   .signin-form fieldset {
@@ -1337,15 +1362,26 @@
     padding: 0;
     margin-bottom: 16px;
     font-size: 19px;
-    font-weight: 620;
-    letter-spacing: -0.04em;
+    font-weight: 650;
+    letter-spacing: -0.03em;
   }
 
   .signin-form button {
+    display: flex;
+    align-items: center;
     justify-content: space-between;
     width: 100%;
     padding: 12px 15px;
     min-height: 44px;
+    border-radius: 7px;
+    background: var(--blue);
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .signin-form button:hover {
+    background: var(--blue-dark);
   }
 
   .role-choice {
@@ -1383,6 +1419,7 @@
     background: var(--blue-wash);
     border-color: #8da9f1;
     color: var(--blue);
+    font-weight: 550;
   }
 
   .role-choice:hover {

@@ -76,7 +76,7 @@ export default function LoginPage() {
             </fieldset>
 
             <button type="submit" disabled={pending !== null}>
-              {pending !== null ? "Memuat ruang kerja…" : "Masuk ke ruang kerja"}{" "}
+              <span>{pending !== null ? "Memuat ruang kerja…" : "Masuk ke ruang kerja"}</span>
               <span aria-hidden="true">→</span>
             </button>
           </form>
