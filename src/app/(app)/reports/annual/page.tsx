@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ReportSummaryPanel } from "@/components/app/report-summary";
 import { SvgIcon } from "@/components/app/svg-sprites";
 import { availableYears, num, pct, qty, rupiah } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
@@ -28,6 +29,8 @@ export default function AnnualReportPage() {
           </select>
         </label>
       </form>
+
+      <ReportSummaryPanel report="annual" params={{ year }} />
 
       {loading ? (
         <section className="panel">

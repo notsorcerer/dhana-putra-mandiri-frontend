@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
+import { ReportSummaryPanel } from "@/components/app/report-summary";
 import { SvgIcon } from "@/components/app/svg-sprites";
 import { num, rupiah, todayIso } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
@@ -52,6 +53,8 @@ export default function BalanceSheetPage() {
           <Input id="as-of" type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
         </label>
       </form>
+
+      <ReportSummaryPanel report="balance-sheet" params={{ as_of_date: asOf }} />
 
       {loading ? (
         <section className="panel">

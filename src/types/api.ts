@@ -658,3 +658,26 @@ export interface HealthStatus {
   database: string;
   modules: Record<string, string>;
 }
+
+// ---------------------------------------------------------------------------
+// Ringkasan laporan (asisten AI / SLM)
+// ---------------------------------------------------------------------------
+
+export type ReportSummaryKind = "sales-trends" | "product-sales" | "annual" | "balance-sheet" | "pie-charts";
+
+export interface ReportSummaryFact {
+  category: "ringkasan" | "tren" | "pencapaian" | "masalah" | "tindak_lanjut";
+  text: string;
+}
+
+export interface ReportSummary {
+  report: ReportSummaryKind;
+  title: string;
+  period: string;
+  status: "ok" | "insufficient";
+  summary: string;
+  message: string;
+  facts: ReportSummaryFact[];
+  model: string | null;
+  generated_at: string;
+}

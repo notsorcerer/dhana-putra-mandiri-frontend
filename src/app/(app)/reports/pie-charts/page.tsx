@@ -1,6 +1,7 @@
 "use client";
 
 import { DistributionPieChart } from "@/components/app/charts";
+import { ReportSummaryPanel } from "@/components/app/report-summary";
 import { SvgIcon } from "@/components/app/svg-sprites";
 import { num, pct, qty, rupiah } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
@@ -11,6 +12,8 @@ export default function PieChartsPage() {
 
   return (
     <div className="space-y-4">
+      <ReportSummaryPanel report="pie-charts" />
+
       {loading ? (
         <section className="panel">
           <div className="empty-state">

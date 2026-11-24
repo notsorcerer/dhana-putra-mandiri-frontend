@@ -13,6 +13,10 @@ const FORWARD_REQUEST_HEADERS = ["accept", "content-type", "accept-language"];
 const FORWARD_RESPONSE_HEADERS = ["content-type", "content-disposition", "retry-after"];
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
+const DEFAULT_TIMEOUT_MS = 30_000;
+// Ringkasan AI (SLM) bisa lebih lama dari request biasa; backend membatasi 120 dtk.
+const SLOW_PATH_TIMEOUT_MS = 150_000;
+const SLOW_PATHS = new Set(["finance/reports/summary"]);
 
 function buildTarget(segments: string[], search: string): string | null {
   if (segments.some((s) => s === "" || s === "." || s === ".." || s.includes("/") || s.includes("\\"))) {
@@ -23,7 +27,13 @@ function buildTarget(segments: string[], search: string): string | null {
   return `${authConfig().apiBaseUrl}/${path}/${search}`;
 }
 
-async function forward(request: NextRequest, target: string, session: StoredSession, body: ArrayBuffer | undefined) {
+async function forward(
+  request: NextRequest,
+  target: string,
+  session: StoredSession,
+  body: ArrayBuffer | undefined,
+  timeoutMs: number,
+) {
   const headers = new Headers();
   for (const name of FORWARD_REQUEST_HEADERS) {
     const value = request.headers.get(name);
@@ -36,7 +46,7 @@ async function forward(request: NextRequest, target: string, session: StoredSess
     body,
     cache: "no-store",
     redirect: "manual",
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 }
 
@@ -48,6 +58,7 @@ async function handler(request: NextRequest, ctx: { params: Promise<{ path: stri
   const { path } = await ctx.params;
   const target = buildTarget(path, request.nextUrl.search);
   if (!target) return NextResponse.json({ detail: "Path tidak valid." }, { status: 400 });
+  const timeoutMs = SLOW_PATHS.has(path.join("/")) ? SLOW_PATH_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
 
   let result = await getActiveSession(request.cookies);
   if (result.status === "unavailable") {
@@ -69,13 +80,13 @@ async function handler(request: NextRequest, ctx: { params: Promise<{ path: stri
 
   let upstream: Response;
   try {
-    upstream = await forward(request, target, result.session, body);
+    upstream = await forward(request, target, result.session, body, timeoutMs);
     // Access token ditolak (mis. dicabut/kedaluwarsa lebih cepat): coba refresh sekali.
     if (upstream.status === 401 && result.session.refreshToken) {
       const retry = await getActiveSession(request.cookies, true);
       if (retry.status === "valid") {
         result = retry;
-        upstream = await forward(request, target, retry.session, body);
+        upstream = await forward(request, target, retry.session, body, timeoutMs);
       }
     }
   } catch (error) {

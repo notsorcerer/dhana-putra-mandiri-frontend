@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -23,6 +24,7 @@ export default function NewDeliveryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
+  const [invoicesLoaded, setInvoicesLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
@@ -46,8 +48,10 @@ export default function NewDeliveryPage() {
       .then(setCustomers)
       .catch(() => undefined);
     fetchAllPages<SalesInvoice>("/finance/sales-invoices/")
-      .then((list) => setInvoices(list.filter((inv) => !inv.delivery)))
-      .catch(() => undefined);
+      // Alur invoice-first: hanya faktur aktif yang belum punya Surat Jalan (relasi 1:1).
+      .then((list) => setInvoices(list.filter((inv) => !inv.delivery && inv.status !== "cancelled")))
+      .catch(() => toast.error("Gagal memuat daftar faktur penjualan."))
+      .finally(() => setInvoicesLoaded(true));
   }, []);
 
   const set = <K extends keyof typeof form>(key: K, value: string) => {
@@ -176,13 +180,25 @@ export default function NewDeliveryPage() {
             onChange={(e) => handleInvoiceChange(e.target.value)}
             required
           >
-            <option value="">Pilih faktur penjualan</option>
+            <option value="">
+              {!invoicesLoaded
+                ? "Memuat faktur…"
+                : invoices.length === 0
+                  ? "Belum ada faktur yang siap dikirim"
+                  : "Pilih faktur penjualan"}
+            </option>
             {invoices.map((inv) => (
               <option key={inv.id} value={inv.id}>
                 {inv.invoice_number} · {inv.customer_name || "Internal"}
               </option>
             ))}
           </select>
+          {invoicesLoaded && invoices.length === 0 && (
+            <small className="field-hint">
+              Surat jalan wajib terikat ke faktur penjualan.{" "}
+              <Link href="/sales-invoices/new">Buat faktur penjualan</Link> terlebih dahulu.
+            </small>
+          )}
         </label>
         <label>
           Mitra

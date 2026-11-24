@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SalesMixCharts, SalesTrendChart } from "@/components/app/charts";
+import { ReportSummaryPanel } from "@/components/app/report-summary";
 import { SvgIcon } from "@/components/app/svg-sprites";
 import { availableYears, num, pct, qty, rupiah } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
@@ -31,6 +32,8 @@ export default function SalesTrendsPage() {
           </select>
         </label>
       </form>
+
+      <ReportSummaryPanel report="sales-trends" params={{ year }} />
 
       {loading ? (
         <section className="panel">

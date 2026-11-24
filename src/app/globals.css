@@ -456,6 +456,17 @@
   }
 
   /* --- Form ------------------------------------------------------------- */
+  .field-hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--muted-legacy);
+  }
+
+  .field-hint a {
+    color: var(--accent-foreground);
+    text-decoration: underline;
+  }
+
   .formgrid,
   .lineform {
     display: grid;
